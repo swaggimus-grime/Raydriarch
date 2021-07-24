@@ -1,31 +1,31 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
-VisualStudioVersion = 16.0.31313.79
-MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Raydriarch", "Raydriarch\Raydriarch.vcxproj", "{F9C83948-00DE-4131-984A-7982C3BC9CCA}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Raydriarch", "Raydriarch\Raydriarch.vcxproj", "{6ECEA372-5A86-E5BF-C38D-BE1BAF6480B0}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Dependencies", "Dependencies", "{53E47842-3FC8-3998-A828-34EB942B241A}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GLFW", "Raydriarch\vendor\GLFW\GLFW.vcxproj", "{154B857C-0182-860D-AA6E-6C109684020F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
-		Debug|x86 = Debug|x86
 		Release|x64 = Release|x64
-		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{F9C83948-00DE-4131-984A-7982C3BC9CCA}.Debug|x64.ActiveCfg = Debug|x64
-		{F9C83948-00DE-4131-984A-7982C3BC9CCA}.Debug|x64.Build.0 = Debug|x64
-		{F9C83948-00DE-4131-984A-7982C3BC9CCA}.Debug|x86.ActiveCfg = Debug|Win32
-		{F9C83948-00DE-4131-984A-7982C3BC9CCA}.Debug|x86.Build.0 = Debug|Win32
-		{F9C83948-00DE-4131-984A-7982C3BC9CCA}.Release|x64.ActiveCfg = Release|x64
-		{F9C83948-00DE-4131-984A-7982C3BC9CCA}.Release|x64.Build.0 = Release|x64
-		{F9C83948-00DE-4131-984A-7982C3BC9CCA}.Release|x86.ActiveCfg = Release|Win32
-		{F9C83948-00DE-4131-984A-7982C3BC9CCA}.Release|x86.Build.0 = Release|Win32
+		{6ECEA372-5A86-E5BF-C38D-BE1BAF6480B0}.Debug|x64.ActiveCfg = Debug|x64
+		{6ECEA372-5A86-E5BF-C38D-BE1BAF6480B0}.Debug|x64.Build.0 = Debug|x64
+		{6ECEA372-5A86-E5BF-C38D-BE1BAF6480B0}.Release|x64.ActiveCfg = Release|x64
+		{6ECEA372-5A86-E5BF-C38D-BE1BAF6480B0}.Release|x64.Build.0 = Release|x64
+		{154B857C-0182-860D-AA6E-6C109684020F}.Debug|x64.ActiveCfg = Debug|x64
+		{154B857C-0182-860D-AA6E-6C109684020F}.Debug|x64.Build.0 = Debug|x64
+		{154B857C-0182-860D-AA6E-6C109684020F}.Release|x64.ActiveCfg = Release|x64
+		{154B857C-0182-860D-AA6E-6C109684020F}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
-	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {F59AD0B2-D9ED-4642-B983-8A630C93EBDF}
+	GlobalSection(NestedProjects) = preSolution
+		{154B857C-0182-860D-AA6E-6C109684020F} = {53E47842-3FC8-3998-A828-34EB942B241A}
 	EndGlobalSection
 EndGlobal

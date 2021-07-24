@@ -1,4 +1,7 @@
+#include "raydpch.h"
+#include "App.h"
 
 int main() {
-	std::cout << "bruh";
+	ScopedPtr<App> app = MakeScopedPtr<App>();
+	if(app) app->Run();
 }
