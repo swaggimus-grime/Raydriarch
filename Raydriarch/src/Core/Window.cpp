@@ -1,6 +1,8 @@
 #include "raydpch.h"
 #include "Window.h"
 
+#include "Graphics/GraphicsCore.h"
+
 static bool s_GLFWInitialized = false;
 
 Window::Window(const WindowProps& props)
@@ -21,7 +23,8 @@ Window::Window(const WindowProps& props)
 	m_Window = glfwCreateWindow(props.Width, props.Height, m_Props.Title.c_str(), nullptr, nullptr);
 	glfwSetWindowUserPointer(m_Window, &m_Props);
 
-	m_Graphics = MakeScopedPtr<Graphics>(m_Window);
+	auto& glfwExtensions = GetRequiredVulkanExtensions();
+	m_Context = MakeScopedPtr<GraphicsContext>(glfwExtensions.size(), glfwExtensions.data());
 
 	glfwSetWindowSizeCallback(m_Window, [](GLFWwindow* window, int width, int height)
 		{
@@ -64,3 +67,18 @@ std::vector<const char*>& Window::GetRequiredVulkanExtensions()
 
 	return extensions;
 }
+
+Surface& Window::GetSurface()
+{
+	if (!m_Surface) {
+		auto& instance = m_Context->GetInstance();
+
+		VkSurfaceKHR surface;
+		RAYD_VK_VALIDATE(glfwCreateWindowSurface(instance, m_Window, nullptr, &surface), "Failed to create suface!");
+
+		m_Surface = MakeScopedPtr<Surface>(instance, surface);
+	}
+	
+	return *m_Surface;
+}
+

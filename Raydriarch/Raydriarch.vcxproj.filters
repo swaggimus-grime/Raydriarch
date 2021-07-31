@@ -38,6 +38,8 @@
     </ClInclude>
     <ClInclude Include="src\raydpch.h" />
     <ClInclude Include="src\Graphics\Device.h" />
+    <ClInclude Include="src\Graphics\Surface.h" />
+    <ClInclude Include="src\Graphics\SwapChain.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Core\App.cpp">
@@ -60,5 +62,6 @@
     </ClCompile>
     <ClCompile Include="src\raydpch.cpp" />
     <ClCompile Include="src\Graphics\Device.cpp" />
+    <ClCompile Include="src\Graphics\SwapChain.cpp" />
   </ItemGroup>
 </Project>

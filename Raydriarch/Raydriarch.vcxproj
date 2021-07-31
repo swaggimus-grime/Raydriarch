@@ -108,6 +108,8 @@
     <ClInclude Include="src\Graphics\Graphics.h" />
     <ClInclude Include="src\Graphics\GraphicsContext.h" />
     <ClInclude Include="src\Graphics\GraphicsCore.h" />
+    <ClInclude Include="src\Graphics\Surface.h" />
+    <ClInclude Include="src\Graphics\SwapChain.h" />
     <ClInclude Include="src\raydpch.h" />
   </ItemGroup>
   <ItemGroup>
@@ -118,6 +120,7 @@
     <ClCompile Include="src\Graphics\Device.cpp" />
     <ClCompile Include="src\Graphics\Graphics.cpp" />
     <ClCompile Include="src\Graphics\GraphicsContext.cpp" />
+    <ClCompile Include="src\Graphics\SwapChain.cpp" />
     <ClCompile Include="src\raydpch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>

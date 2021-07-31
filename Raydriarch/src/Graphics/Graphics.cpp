@@ -1,18 +1,29 @@
 #include "raydpch.h"
 #include "Graphics.h"
 
-Graphics::Graphics(const GLFWwindow* window)
-{
-	auto& glfwExtensions = Window::GetRequiredVulkanExtensions();
-	m_Context = MakeScopedPtr<GraphicsContext>(glfwExtensions.size(), glfwExtensions.data());
+#include "Surface.h"
 
-	auto& instance = m_Context->GetInstance();
+struct GraphicsObjects {
+	ScopedPtr<Device> GPU;
+	ScopedPtr<SwapChain> SwapChain;
+
+} *s_Objects = new GraphicsObjects;
+
+void Graphics::Init(Window* window)
+{
+	auto& instance = window->GetGraphicsContext().GetInstance();
+
+	Surface& surface = window->GetSurface();
 
 	VkPhysicalDeviceFeatures deviceFeatures{};
 	deviceFeatures.geometryShader = 1;
-	m_Device = MakeScopedPtr<Device>(instance, deviceFeatures);
+	s_Objects->GPU = MakeScopedPtr<Device>(instance, surface.GetSurfaceHandle(), deviceFeatures);
+
+	//auto [width, height] = window->GetFramebufferSize();
+	//s_Objects->SwapChain = MakeScopedPtr<SwapChain>(s_Objects->GPU.get(), surface.GetSurfaceHandle(), width, height);
 }
 
-Graphics::~Graphics()
+void Graphics::Shutdown()
 {
+	delete s_Objects;
 }
