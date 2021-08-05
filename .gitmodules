@@ -1,3 +1,6 @@
 [submodule "Raydriarch/vendor/GLFW"]
 	path = Raydriarch/vendor/GLFW
 	url = https://github.com/glfw/glfw.git
+[submodule "Raydriarch/vendor\\Shaderc"]
+	path = Raydriarch/vendor\\Shaderc
+	url = https://github.com/google/shaderc.git
