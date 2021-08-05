@@ -10,7 +10,6 @@ public:
 	~GraphicsContext();
 
 	inline VkInstance& GetInstance() { return m_Instance; }
-
 private:
 	void VerifyValidationLayers();
 	void CreateDebugMessenger(VkDebugUtilsMessengerCreateInfoEXT& debugMessengerInfo);

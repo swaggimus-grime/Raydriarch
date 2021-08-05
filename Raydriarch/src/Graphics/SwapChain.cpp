@@ -10,8 +10,9 @@ SwapChain::SwapChain(Device* device, VkSurfaceKHR& surface,
     auto& physicalDevice = device->GetPhysicalDeviceHandle();
     auto& details = device->GetSwapChainSupportDetails();
 	VkSurfaceFormatKHR& surfaceFormat = FindSurfaceFormat(physicalDevice, details, surface);
+    m_Format = surfaceFormat.format;
 	VkPresentModeKHR presentMode = FindPresentMode(physicalDevice, details, surface);
-    VkExtent2D& swapExtent = FindSwapExtent(details, framebufferWidth, framebufferHeight);
+    m_Extent = FindSwapExtent(details, framebufferWidth, framebufferHeight);
 
     uint32_t imageCount = details.Capabilities.minImageCount + 1;
     imageCount = std::clamp(imageCount, details.Capabilities.minImageCount, details.Capabilities.maxImageCount);
@@ -20,9 +21,9 @@ SwapChain::SwapChain(Device* device, VkSurfaceKHR& surface,
     swapChainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     swapChainInfo.surface = surface;
     swapChainInfo.minImageCount = imageCount;
-    swapChainInfo.imageFormat = surfaceFormat.format;
+    swapChainInfo.imageFormat = m_Format;
     swapChainInfo.imageColorSpace = surfaceFormat.colorSpace;
-    swapChainInfo.imageExtent = swapExtent;
+    swapChainInfo.imageExtent = m_Extent;
     swapChainInfo.imageArrayLayers = 1;
     swapChainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
@@ -34,11 +35,8 @@ SwapChain::SwapChain(Device* device, VkSurfaceKHR& surface,
         swapChainInfo.queueFamilyIndexCount = 2;
         swapChainInfo.pQueueFamilyIndices = queueFamilyIndices;
     }
-    else {
+    else 
         swapChainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        swapChainInfo.queueFamilyIndexCount = 0;
-        swapChainInfo.pQueueFamilyIndices = nullptr;
-    }
        
     swapChainInfo.preTransform = details.Capabilities.currentTransform;
     swapChainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
@@ -48,10 +46,35 @@ SwapChain::SwapChain(Device* device, VkSurfaceKHR& surface,
 
     RAYD_VK_VALIDATE(vkCreateSwapchainKHR(logicalDevice, &swapChainInfo, nullptr, &m_SwapChain), 
         "Failed to create swap chain!");
+
+    vkGetSwapchainImagesKHR(logicalDevice, m_SwapChain, &imageCount, nullptr);
+    m_Images.resize(imageCount);
+    vkGetSwapchainImagesKHR(logicalDevice, m_SwapChain, &imageCount, m_Images.data());
+
+    m_ImageViews.resize(m_Images.size());
+
+    for (uint32_t i = 0; i < m_Images.size(); i++) {
+        VkImageViewCreateInfo imageViewInfo{};
+        imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        imageViewInfo.image = m_Images[i];
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        imageViewInfo.format = m_Format;
+        imageViewInfo.components = { VK_COMPONENT_SWIZZLE_IDENTITY };
+        imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageViewInfo.subresourceRange.baseMipLevel = 0;
+        imageViewInfo.subresourceRange.levelCount = 1;
+        imageViewInfo.subresourceRange.baseArrayLayer = 0;
+        imageViewInfo.subresourceRange.layerCount = 1;
+
+        RAYD_VK_VALIDATE(vkCreateImageView(logicalDevice, &imageViewInfo, nullptr, &m_ImageViews[i]), "Failed to create image view!");
+    }
 }
 
 SwapChain::~SwapChain()
 {
+    for (auto& imageView : m_ImageViews) 
+        vkDestroyImageView(logicalDevice, imageView, nullptr);
+
     vkDestroySwapchainKHR(logicalDevice, m_SwapChain, nullptr);
 }
 

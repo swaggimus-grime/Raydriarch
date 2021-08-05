@@ -60,7 +60,7 @@
       <PrecompiledHeaderFile>raydpch.h</PrecompiledHeaderFile>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;GLFW_INCLUDE_NONE;GLFW_INCLUDE_VULKAN;RAYD_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>src;vendor\GLFW\include;vendor\Vulkan\include;vendor\spdlog\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;vendor\GLFW\include;vendor\Vulkan\include;vendor\spdlog\include;vendor\Shaderc\libshaderc\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <Optimization>Disabled</Optimization>
       <MinimalRebuild>false</MinimalRebuild>
@@ -81,7 +81,7 @@
       <PrecompiledHeaderFile>raydpch.h</PrecompiledHeaderFile>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;GLFW_INCLUDE_NONE;GLFW_INCLUDE_VULKAN;RAYD_RELEASE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>src;vendor\GLFW\include;vendor\Vulkan\include;vendor\spdlog\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;vendor\GLFW\include;vendor\Vulkan\include;vendor\spdlog\include;vendor\Shaderc\libshaderc\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -108,6 +108,8 @@
     <ClInclude Include="src\Graphics\Graphics.h" />
     <ClInclude Include="src\Graphics\GraphicsContext.h" />
     <ClInclude Include="src\Graphics\GraphicsCore.h" />
+    <ClInclude Include="src\Graphics\GraphicsPipeline.h" />
+    <ClInclude Include="src\Graphics\Shader.h" />
     <ClInclude Include="src\Graphics\Surface.h" />
     <ClInclude Include="src\Graphics\SwapChain.h" />
     <ClInclude Include="src\raydpch.h" />
@@ -120,6 +122,8 @@
     <ClCompile Include="src\Graphics\Device.cpp" />
     <ClCompile Include="src\Graphics\Graphics.cpp" />
     <ClCompile Include="src\Graphics\GraphicsContext.cpp" />
+    <ClCompile Include="src\Graphics\GraphicsPipeline.cpp" />
+    <ClCompile Include="src\Graphics\Shader.cpp" />
     <ClCompile Include="src\Graphics\SwapChain.cpp" />
     <ClCompile Include="src\raydpch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>

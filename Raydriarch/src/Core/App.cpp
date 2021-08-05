@@ -18,5 +18,7 @@ void App::Run()
 {
 	while (!m_Window->IsClosed()) {
 		m_Window->Update();
+		Graphics::Present();
 	}
+
 }

@@ -8,7 +8,8 @@
 class Graphics {
 public:
 	static void Init(class Window* window);
+	static void Present();
 	static void Shutdown();
 private:
-
+	
 };

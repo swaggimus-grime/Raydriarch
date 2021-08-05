@@ -20,6 +20,7 @@ IncludeDir = {}
 IncludeDir["GLFW"] = "Raydriarch/vendor/GLFW/include"
 IncludeDir["Vulkan"] = "Raydriarch/vendor/Vulkan/include"
 IncludeDir["spdlog"] = "Raydriarch/vendor/spdlog/include"
+IncludeDir["libshaderc"] = "Raydriarch/vendor/Shaderc/libshaderc/include"
 
 group "Dependencies"
 	include "Raydriarch/vendor/GLFW"
@@ -58,7 +59,8 @@ project "Raydriarch"
 		"%{prj.name}/src",
 		"%{IncludeDir.GLFW}",
 		"%{IncludeDir.Vulkan}",
-		"%{IncludeDir.spdlog}"
+		"%{IncludeDir.spdlog}",
+		"%{IncludeDir.libshaderc}"
 	}
 
 	links 
