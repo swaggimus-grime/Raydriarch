@@ -1,6 +1,9 @@
 #include "raydpch.h"
 #include "GraphicsPipeline.h"
 
+//Defines max number of frames that are allowed to be processed by the graphics pipeline 
+#define MAX_FRAMES_IN_FLIGHT 2
+
 GraphicsPipeline::GraphicsPipeline(Window* window)
 {
 	auto& instance = window->GetGraphicsContext().GetInstance();
@@ -18,86 +21,8 @@ GraphicsPipeline::GraphicsPipeline(Window* window)
 	
 	CreatePipeline(shader.get());
 	CreateFramebuffers();
-
-	VkCommandPoolCreateInfo commandPoolInfo{};
-	commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	commandPoolInfo.queueFamilyIndex = *m_Device->GetQueueFamilies().Graphics.Index;
-
-	RAYD_VK_VALIDATE(vkCreateCommandPool(m_Device->GetDeviceHandle(), &commandPoolInfo, nullptr, &m_CommandPool), 
-		"Failed to create command pool!");
-
-	m_CommandBuffers.resize(m_Framebuffers.size());
-
-	VkCommandBufferAllocateInfo allocateInfo{};
-	allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocateInfo.commandPool = m_CommandPool;
-	allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocateInfo.commandBufferCount = (uint32_t)m_CommandBuffers.size();
-
-	RAYD_VK_VALIDATE(vkAllocateCommandBuffers(m_Device->GetDeviceHandle(), &allocateInfo, m_CommandBuffers.data()), 
-		"Failed to allocate command buffers!");
-
-	for (uint32_t i = 0; i < m_CommandBuffers.size(); i++) {
-		VkCommandBufferBeginInfo beginInfo{};
-		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-		RAYD_VK_VALIDATE(vkBeginCommandBuffer(m_CommandBuffers[i], &beginInfo), "Failed to start recording command buffer!");
-
-		VkRenderPassBeginInfo renderPassInfo{};
-		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassInfo.renderPass = m_RenderPass;
-		renderPassInfo.framebuffer = m_Framebuffers[i];
-		renderPassInfo.renderArea.offset = { 0, 0 };
-		renderPassInfo.renderArea.extent = m_SwapChain->GetExtent();
-		VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
-		renderPassInfo.clearValueCount = 1;
-		renderPassInfo.pClearValues = &clearColor;
-
-		vkCmdBeginRenderPass(m_CommandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-		vkCmdBindPipeline(m_CommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
-		vkCmdDraw(m_CommandBuffers[i], 3, 1, 0, 0);
-		vkCmdEndRenderPass(m_CommandBuffers[i]);
-		RAYD_VK_VALIDATE(vkEndCommandBuffer(m_CommandBuffers[i]), "Failed to record command buffer!");
-	}
-
-	VkSemaphoreCreateInfo semaphoreInfo{};
-	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-	RAYD_VK_VALIDATE(vkCreateSemaphore(m_Device->GetDeviceHandle(), &semaphoreInfo, nullptr, &m_ImageAvailableSemaphore), 
-		"Failed to create semaphore for signaling image availability!");
-	RAYD_VK_VALIDATE(vkCreateSemaphore(m_Device->GetDeviceHandle(), &semaphoreInfo, nullptr, &m_RenderFinishedSemaphore),
-		"Failed to create semaphore for signaling rendering finish!");
-
-	uint32_t imageIndex;
-	vkAcquireNextImageKHR(m_Device->GetDeviceHandle(), m_SwapChain->GetSwapChainHandle(), UINT64_MAX, m_ImageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
-
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-	VkSemaphore waitSemaphores[] = { m_ImageAvailableSemaphore };
-	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = waitSemaphores;
-	submitInfo.pWaitDstStageMask = waitStages;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &m_CommandBuffers[imageIndex];
-
-	VkSemaphore signalSemaphores[] = { m_RenderFinishedSemaphore };
-	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = signalSemaphores;
-
-	RAYD_VK_VALIDATE(vkQueueSubmit(m_Device->GetQueueFamilies().Graphics.Queue, 1, &submitInfo, VK_NULL_HANDLE), "Failed to submit to queue!");
-
-	VkPresentInfoKHR presentInfo{};
-	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = signalSemaphores;
-	VkSwapchainKHR swapChains[] = { m_SwapChain->GetSwapChainHandle() };
-	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = swapChains;
-	presentInfo.pImageIndices = &imageIndex;
-
-	vkQueuePresentKHR(m_Device->GetQueueFamilies().Present.Queue, &presentInfo);
+	AllocateCommandBuffers();
+	CreateSyncObjects();
 }
 
 GraphicsPipeline::~GraphicsPipeline()
@@ -105,17 +30,68 @@ GraphicsPipeline::~GraphicsPipeline()
 	for (auto& framebuffer : m_Framebuffers) 
 		vkDestroyFramebuffer(m_Device->GetDeviceHandle(), framebuffer, nullptr);
 
-	vkDestroySemaphore(m_Device->GetDeviceHandle(), m_RenderFinishedSemaphore, nullptr);
-	vkDestroySemaphore(m_Device->GetDeviceHandle(), m_ImageAvailableSemaphore, nullptr);
-	vkDestroyCommandPool(m_Device->GetDeviceHandle(), m_CommandPool, nullptr);
 	vkDestroyPipeline(m_Device->GetDeviceHandle(), m_Pipeline, nullptr);
 	vkDestroyPipelineLayout(m_Device->GetDeviceHandle(), m_PipelineLayout, nullptr);
 	vkDestroyRenderPass(m_Device->GetDeviceHandle(), m_RenderPass, nullptr);
+
+	for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		vkDestroySemaphore(m_Device->GetDeviceHandle(), m_ImageAvailableSemaphores[i], nullptr);
+		vkDestroySemaphore(m_Device->GetDeviceHandle(), m_RenderFinishedSemaphores[i], nullptr);
+		vkDestroyFence(m_Device->GetDeviceHandle(), m_InFlightFences[i], nullptr);
+	}
+		
+	vkDestroyCommandPool(m_Device->GetDeviceHandle(), m_CommandPool, nullptr);
 }
 
 void GraphicsPipeline::Present()
 {
-	
+	static uint32_t currentFrame = 0;
+
+	vkWaitForFences(m_Device->GetDeviceHandle(), 1, &m_InFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+
+	uint32_t imageIndex;
+	vkAcquireNextImageKHR(m_Device->GetDeviceHandle(), m_SwapChain->GetSwapChainHandle(), UINT64_MAX, m_ImageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+	if (m_ImagesInFlight[imageIndex] != VK_NULL_HANDLE) 
+		vkWaitForFences(m_Device->GetDeviceHandle(), 1, &m_ImagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+
+	m_ImagesInFlight[imageIndex] = m_InFlightFences[currentFrame];
+
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+	VkSemaphore waitSemaphores[] = { m_ImageAvailableSemaphores[currentFrame] };
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = waitSemaphores;
+	submitInfo.pWaitDstStageMask = waitStages;
+
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &m_CommandBuffers[imageIndex];
+
+	VkSemaphore signalSemaphores[] = { m_RenderFinishedSemaphores[currentFrame] };
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = signalSemaphores;
+
+	vkResetFences(m_Device->GetDeviceHandle(), 1, &m_InFlightFences[currentFrame]);
+
+	RAYD_VK_VALIDATE(vkQueueSubmit(m_Device->GetQueueFamilies().Graphics.Queue, 1, &submitInfo, m_InFlightFences[currentFrame]), 
+		"Failed to submit command buffer to graphics queue!")
+	VkPresentInfoKHR presentInfo{};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = signalSemaphores;
+
+	VkSwapchainKHR swapChains[] = { m_SwapChain->GetSwapChainHandle() };
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = swapChains;
+
+	presentInfo.pImageIndices = &imageIndex;
+
+	vkQueuePresentKHR(m_Device->GetQueueFamilies().Present.Queue, &presentInfo);
+
+	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 void GraphicsPipeline::Shutdown()
@@ -282,5 +258,73 @@ void GraphicsPipeline::CreateFramebuffers()
 
 		RAYD_VK_VALIDATE(vkCreateFramebuffer(m_Device->GetDeviceHandle(), &framebufferInfo, nullptr, &m_Framebuffers[i]),
 			"Failed to create framebuffer!");
+	}
+}
+
+void GraphicsPipeline::AllocateCommandBuffers()
+{
+	VkCommandPoolCreateInfo commandPoolInfo{};
+	commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	commandPoolInfo.queueFamilyIndex = *m_Device->GetQueueFamilies().Graphics.Index;
+
+	RAYD_VK_VALIDATE(vkCreateCommandPool(m_Device->GetDeviceHandle(), &commandPoolInfo, nullptr, &m_CommandPool),
+		"Failed to create command pool!");
+
+	m_CommandBuffers.resize(m_Framebuffers.size());
+
+	VkCommandBufferAllocateInfo allocateInfo{};
+	allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocateInfo.commandPool = m_CommandPool;
+	allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocateInfo.commandBufferCount = (uint32_t)m_CommandBuffers.size();
+
+	RAYD_VK_VALIDATE(vkAllocateCommandBuffers(m_Device->GetDeviceHandle(), &allocateInfo, m_CommandBuffers.data()),
+		"Failed to allocate command buffers!");
+
+	for (uint32_t i = 0; i < m_CommandBuffers.size(); i++) {
+		VkCommandBufferBeginInfo beginInfo{};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+		RAYD_VK_VALIDATE(vkBeginCommandBuffer(m_CommandBuffers[i], &beginInfo), "Failed to start recording command buffer!");
+
+		VkRenderPassBeginInfo renderPassInfo{};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassInfo.renderPass = m_RenderPass;
+		renderPassInfo.framebuffer = m_Framebuffers[i];
+		renderPassInfo.renderArea.offset = { 0, 0 };
+		renderPassInfo.renderArea.extent = m_SwapChain->GetExtent();
+		VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+		renderPassInfo.clearValueCount = 1;
+		renderPassInfo.pClearValues = &clearColor;
+
+		vkCmdBeginRenderPass(m_CommandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBindPipeline(m_CommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
+		vkCmdDraw(m_CommandBuffers[i], 3, 1, 0, 0);
+		vkCmdEndRenderPass(m_CommandBuffers[i]);
+		RAYD_VK_VALIDATE(vkEndCommandBuffer(m_CommandBuffers[i]), "Failed to record command buffer!");
+	}
+}
+
+void GraphicsPipeline::CreateSyncObjects()
+{
+	m_ImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+	m_RenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+	m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+	m_ImagesInFlight.resize(m_SwapChain->GetImages().size(), VK_NULL_HANDLE);
+
+	VkSemaphoreCreateInfo semaphoreInfo{};
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	VkFenceCreateInfo fenceInfo{};
+	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+	for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		RAYD_VK_VALIDATE(vkCreateSemaphore(m_Device->GetDeviceHandle(), &semaphoreInfo, nullptr, &m_ImageAvailableSemaphores[i]),
+			"Failed to create semaphore for signaling image availability!");
+		RAYD_VK_VALIDATE(vkCreateSemaphore(m_Device->GetDeviceHandle(), &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]),
+			"Failed to create semaphore for signaling rendering finish!");
+		RAYD_VK_VALIDATE(vkCreateFence(m_Device->GetDeviceHandle(), &fenceInfo, nullptr, &m_InFlightFences[i]),
+			"Failed to create fence!");
 	}
 }

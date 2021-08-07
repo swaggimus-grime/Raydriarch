@@ -46,6 +46,7 @@
       <Filter>Graphics</Filter>
     </ClInclude>
     <ClInclude Include="src\raydpch.h" />
+    <ClInclude Include="src\Graphics\RenderPass.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Core\App.cpp">
@@ -79,5 +80,6 @@
       <Filter>Graphics</Filter>
     </ClCompile>
     <ClCompile Include="src\raydpch.cpp" />
+    <ClCompile Include="src\Graphics\RenderPass.cpp" />
   </ItemGroup>
 </Project>

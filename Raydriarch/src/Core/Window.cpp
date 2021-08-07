@@ -32,6 +32,11 @@ Window::Window(const WindowProps& props)
 			props.Width = width;
 			props.Height = height;
 		});
+
+	glfwSetFramebufferSizeCallback(m_Window, [](GLFWwindow* window, int width, int height) 
+		{
+
+		});
 }
 
 Window::~Window()

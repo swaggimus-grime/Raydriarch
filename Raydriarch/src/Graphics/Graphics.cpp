@@ -15,7 +15,7 @@ void Graphics::Init(Window* window)
 
 void Graphics::Present()
 {
-
+	s_Objects->Pipeline->Present();
 }
 
 void Graphics::Shutdown()

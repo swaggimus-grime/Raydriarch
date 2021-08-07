@@ -14,6 +14,8 @@ public:
 private:
 	void CreatePipeline(Shader* shader);
 	void CreateFramebuffers();
+	void AllocateCommandBuffers();
+	void CreateSyncObjects();
 private:
 	VkPipeline m_Pipeline;
 
@@ -28,6 +30,8 @@ private:
 	VkCommandPool m_CommandPool;
 	std::vector<VkCommandBuffer> m_CommandBuffers;
 
-	VkSemaphore m_ImageAvailableSemaphore;
-	VkSemaphore m_RenderFinishedSemaphore;
+	std::vector<VkSemaphore> m_ImageAvailableSemaphores;
+	std::vector<VkSemaphore> m_RenderFinishedSemaphores;
+	std::vector<VkFence> m_InFlightFences;
+	std::vector<VkFence> m_ImagesInFlight;
 };

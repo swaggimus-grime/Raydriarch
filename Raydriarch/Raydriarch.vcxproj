@@ -109,6 +109,7 @@
     <ClInclude Include="src\Graphics\GraphicsContext.h" />
     <ClInclude Include="src\Graphics\GraphicsCore.h" />
     <ClInclude Include="src\Graphics\GraphicsPipeline.h" />
+    <ClInclude Include="src\Graphics\RenderPass.h" />
     <ClInclude Include="src\Graphics\Shader.h" />
     <ClInclude Include="src\Graphics\Surface.h" />
     <ClInclude Include="src\Graphics\SwapChain.h" />
@@ -123,6 +124,7 @@
     <ClCompile Include="src\Graphics\Graphics.cpp" />
     <ClCompile Include="src\Graphics\GraphicsContext.cpp" />
     <ClCompile Include="src\Graphics\GraphicsPipeline.cpp" />
+    <ClCompile Include="src\Graphics\RenderPass.cpp" />
     <ClCompile Include="src\Graphics\Shader.cpp" />
     <ClCompile Include="src\Graphics\SwapChain.cpp" />
     <ClCompile Include="src\raydpch.cpp">
