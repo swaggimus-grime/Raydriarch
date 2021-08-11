@@ -4,3 +4,6 @@
 [submodule "Raydriarch/vendor\\Shaderc"]
 	path = Raydriarch/vendor\\Shaderc
 	url = https://github.com/google/shaderc.git
+[submodule "Raydriarch/vendor/glm"]
+	path = Raydriarch/vendor/glm
+	url = https://github.com/g-truc/glm.git
