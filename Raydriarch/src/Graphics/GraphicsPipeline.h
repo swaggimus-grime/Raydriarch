@@ -3,10 +3,11 @@
 #include "Core/Window.h"
 #include "Device.h"
 #include "Shader.h"
+#include "Buffer.h"
 
 class GraphicsPipeline {
 public:
-	GraphicsPipeline(Window* window);
+	GraphicsPipeline(Window* window, Device* device);
 	~GraphicsPipeline();
 
 	void Present();
@@ -19,7 +20,7 @@ private:
 private:
 	VkPipeline m_Pipeline;
 
-	ScopedPtr<Device> m_Device;
+	Device* m_Device;
 	ScopedPtr<SwapChain> m_SwapChain;
 
 	VkPipelineLayout m_PipelineLayout;
@@ -29,6 +30,9 @@ private:
 
 	VkCommandPool m_CommandPool;
 	std::vector<VkCommandBuffer> m_CommandBuffers;
+
+	VertexBuffer* m_VertexBuffer;
+	IndexBuffer* m_IndexBuffer;
 
 	std::vector<VkSemaphore> m_ImageAvailableSemaphores;
 	std::vector<VkSemaphore> m_RenderFinishedSemaphores;

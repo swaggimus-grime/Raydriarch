@@ -1,24 +1,35 @@
 #include "raydpch.h"
 #include "GraphicsPipeline.h"
 
+#include <glm/glm.hpp>
+
+struct Vertex {
+	glm::vec2 Position;
+	glm::vec3 Color;
+};
+
+const std::vector<Vertex> vertices = {
+	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+	{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+	{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+};
+
+const std::vector<uint16_t> indices = {
+	0, 1, 2, 2, 3, 0
+};
+
 //Defines max number of frames that are allowed to be processed by the graphics pipeline 
 #define MAX_FRAMES_IN_FLIGHT 2
 
-GraphicsPipeline::GraphicsPipeline(Window* window)
+GraphicsPipeline::GraphicsPipeline(Window* window, Device* device)
+	:m_Device(device)
 {
-	auto& instance = window->GetGraphicsContext().GetInstance();
-
-	Surface& surface = window->GetSurface();
-
-	VkPhysicalDeviceFeatures deviceFeatures{};
-	deviceFeatures.geometryShader = 1;
-	m_Device = MakeScopedPtr<Device>(instance, surface.GetSurfaceHandle(), deviceFeatures);
-
 	auto [width, height] = window->GetFramebufferSize();
-	m_SwapChain = MakeScopedPtr<SwapChain>(m_Device.get(), surface.GetSurfaceHandle(), width, height);
+	m_SwapChain = MakeScopedPtr<SwapChain>(device, window->GetSurface().GetSurfaceHandle(), width, height);
 
 	ScopedPtr<Shader> shader = MakeScopedPtr<Shader>(m_Device->GetDeviceHandle(), "res/shaders/vert.spv", "res/shaders/frag.spv");
-	
+
 	CreatePipeline(shader.get());
 	CreateFramebuffers();
 	AllocateCommandBuffers();
@@ -97,6 +108,8 @@ void GraphicsPipeline::Present()
 void GraphicsPipeline::Shutdown()
 {
 	vkDeviceWaitIdle(m_Device->GetDeviceHandle());
+	delete m_VertexBuffer;
+	delete m_IndexBuffer;
 }
 
 void GraphicsPipeline::CreatePipeline(Shader* shader)
@@ -114,10 +127,29 @@ void GraphicsPipeline::CreatePipeline(Shader* shader)
 	fragShaderStageInfo.module = shader->GetFragmentShaderModule();
 	fragShaderStageInfo.pName = "main";
 
+	VkVertexInputBindingDescription bindingDescription{};
+	bindingDescription.binding = 0;
+	bindingDescription.stride = sizeof(Vertex);
+	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+	std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+
+	attributeDescriptions[0].binding = 0;
+	attributeDescriptions[0].location = 0;
+	attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+	attributeDescriptions[0].offset = offsetof(Vertex, Position);
+
+	attributeDescriptions[1].binding = 0;
+	attributeDescriptions[1].location = 1;
+	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+	attributeDescriptions[1].offset = offsetof(Vertex, Color);
+
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 0;
-	vertexInputInfo.vertexAttributeDescriptionCount = 0;
+	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{};
 	inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -270,6 +302,9 @@ void GraphicsPipeline::AllocateCommandBuffers()
 	RAYD_VK_VALIDATE(vkCreateCommandPool(m_Device->GetDeviceHandle(), &commandPoolInfo, nullptr, &m_CommandPool),
 		"Failed to create command pool!");
 
+	m_VertexBuffer = new VertexBuffer(m_Device, m_CommandPool, vertices.size() * sizeof(Vertex), vertices.data());
+	m_IndexBuffer = new IndexBuffer(m_Device, m_CommandPool, indices.size() * sizeof(uint16_t), indices.data());
+
 	m_CommandBuffers.resize(m_Framebuffers.size());
 
 	VkCommandBufferAllocateInfo allocateInfo{};
@@ -299,7 +334,11 @@ void GraphicsPipeline::AllocateCommandBuffers()
 
 		vkCmdBeginRenderPass(m_CommandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 		vkCmdBindPipeline(m_CommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
-		vkCmdDraw(m_CommandBuffers[i], 3, 1, 0, 0);
+		m_VertexBuffer->Bind(m_CommandBuffers[i]);
+		m_IndexBuffer->Bind(m_CommandBuffers[i]);
+
+		vkCmdDrawIndexed(m_CommandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+
 		vkCmdEndRenderPass(m_CommandBuffers[i]);
 		RAYD_VK_VALIDATE(vkEndCommandBuffer(m_CommandBuffers[i]), "Failed to record command buffer!");
 	}

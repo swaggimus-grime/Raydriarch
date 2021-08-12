@@ -18,6 +18,7 @@ outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 -- Rendering/Display includes
 IncludeDir = {}
 IncludeDir["GLFW"] = "Raydriarch/vendor/GLFW/include"
+IncludeDir["glm"] = "Raydriarch/vendor/glm"
 IncludeDir["Vulkan"] = "Raydriarch/vendor/Vulkan/include"
 IncludeDir["spdlog"] = "Raydriarch/vendor/spdlog/include"
 IncludeDir["libshaderc"] = "Raydriarch/vendor/Shaderc/libshaderc/include"
@@ -43,6 +44,8 @@ project "Raydriarch"
 	{
 		"%{prj.name}/src/**.h",
 		"%{prj.name}/src/**.cpp",
+		"%{prj.name}/vendor/glm/glm/**.hpp",
+		"%{prj.name}/vendor/glm/glm/**.inl"
 	}
 
 	defines
@@ -60,7 +63,8 @@ project "Raydriarch"
 		"%{IncludeDir.GLFW}",
 		"%{IncludeDir.Vulkan}",
 		"%{IncludeDir.spdlog}",
-		"%{IncludeDir.libshaderc}"
+		"%{IncludeDir.libshaderc}",
+		"%{IncludeDir.glm}"
 	}
 
 	links 
