@@ -1323,6 +1323,7 @@
     <ClInclude Include="vendor\glm\glm\vector_relational.hpp">
       <Filter>vendor\glm\glm</Filter>
     </ClInclude>
+    <ClInclude Include="src\Graphics\Descriptor.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Core\App.cpp">
@@ -1364,5 +1365,6 @@
     <ClCompile Include="src\raydpch.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\Graphics\Descriptor.cpp" />
   </ItemGroup>
 </Project>

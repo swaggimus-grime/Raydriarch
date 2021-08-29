@@ -77,3 +77,5 @@ constexpr RefPtr<T> MakeRefPtr(Args&& ... args)
 	return std::make_shared<T>(std::forward<Args>(args)...);
 }
 
+template<typename T>
+using PeekPtr = std::weak_ptr<T>;

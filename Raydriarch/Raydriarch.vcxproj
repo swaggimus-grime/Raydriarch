@@ -105,6 +105,7 @@
     <ClInclude Include="src\Core\Log.h" />
     <ClInclude Include="src\Core\Window.h" />
     <ClInclude Include="src\Graphics\Buffer.h" />
+    <ClInclude Include="src\Graphics\Descriptor.h" />
     <ClInclude Include="src\Graphics\Device.h" />
     <ClInclude Include="src\Graphics\Graphics.h" />
     <ClInclude Include="src\Graphics\GraphicsContext.h" />
@@ -537,6 +538,7 @@
     <ClCompile Include="src\Core\Main.cpp" />
     <ClCompile Include="src\Core\Window.cpp" />
     <ClCompile Include="src\Graphics\Buffer.cpp" />
+    <ClCompile Include="src\Graphics\Descriptor.cpp" />
     <ClCompile Include="src\Graphics\Device.cpp" />
     <ClCompile Include="src\Graphics\Graphics.cpp" />
     <ClCompile Include="src\Graphics\GraphicsContext.cpp" />

@@ -6,7 +6,7 @@ App::App(const std::string& name)
 	Log::Init();
 	m_Window = MakeScopedPtr<Window>(WindowProps{ "Raydriarch", 1280, 720 });
 	
-	Graphics::Init(m_Window.get());
+	Graphics::Init(m_Window);
 }
 
 App::~App()

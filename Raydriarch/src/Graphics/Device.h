@@ -31,6 +31,7 @@ public:
 	inline const VkPhysicalDevice& GetPhysicalDeviceHandle() const { return m_PhysicalDevice; }
 	inline const VkDevice& GetDeviceHandle() const { return m_Device; }
 
+	void UpdateSwapChainSupportDetails(VkSurfaceKHR& surface);
 	inline const SwapChainSupportDetails& GetSwapChainSupportDetails() const { return m_SwapChainSupportDetails; }
 
 	inline const QueueFamilies& GetQueueFamilies() const { return m_QueueFamilies; }

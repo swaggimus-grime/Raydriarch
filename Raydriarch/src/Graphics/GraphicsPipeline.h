@@ -7,32 +7,33 @@
 
 class GraphicsPipeline {
 public:
-	GraphicsPipeline(Window* window, Device* device);
+	GraphicsPipeline(ScopedPtr<Window>& window, RefPtr<Device> device);
 	~GraphicsPipeline();
 
 	void Present();
 	void Shutdown();
 private:
-	void CreatePipeline(Shader* shader);
-	void CreateFramebuffers();
+	void CreatePipeline();
+	void CreateCommandPool();
 	void AllocateCommandBuffers();
 	void CreateSyncObjects();
 private:
+	ScopedPtr<Window>& m_Window;
+
 	VkPipeline m_Pipeline;
 
-	Device* m_Device;
+	RefPtr<Device> m_Device;
 	ScopedPtr<SwapChain> m_SwapChain;
 
 	VkPipelineLayout m_PipelineLayout;
-	VkRenderPass m_RenderPass;
-
-	std::vector<VkFramebuffer> m_Framebuffers;
 
 	VkCommandPool m_CommandPool;
 	std::vector<VkCommandBuffer> m_CommandBuffers;
 
 	VertexBuffer* m_VertexBuffer;
 	IndexBuffer* m_IndexBuffer;
+
+	ScopedPtr<Shader> m_Shader;
 
 	std::vector<VkSemaphore> m_ImageAvailableSemaphores;
 	std::vector<VkSemaphore> m_RenderFinishedSemaphores;

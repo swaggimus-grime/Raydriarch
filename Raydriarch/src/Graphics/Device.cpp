@@ -15,6 +15,28 @@ Device::~Device()
 	vkDestroyDevice(m_Device, nullptr);
 }
 
+void Device::UpdateSwapChainSupportDetails(VkSurfaceKHR& surface)
+{
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_PhysicalDevice, surface,
+		&m_SwapChainSupportDetails.Capabilities);
+
+	uint32_t formatCount;
+	vkGetPhysicalDeviceSurfaceFormatsKHR(m_PhysicalDevice, surface, &formatCount, nullptr);
+	if (formatCount > 0) {
+		m_SwapChainSupportDetails.Formats.resize(formatCount);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(m_PhysicalDevice, surface, &formatCount,
+			m_SwapChainSupportDetails.Formats.data());
+	}
+
+	uint32_t presentModeCount;
+	vkGetPhysicalDeviceSurfacePresentModesKHR(m_PhysicalDevice, surface, &presentModeCount, nullptr);
+	if (presentModeCount > 0) {
+		m_SwapChainSupportDetails.PresentModes.resize(presentModeCount);
+		vkGetPhysicalDeviceSurfacePresentModesKHR(m_PhysicalDevice, surface, &presentModeCount,
+			m_SwapChainSupportDetails.PresentModes.data());
+	}
+}
+
 VkPhysicalDevice Device::FindPhysicalDevice(VkInstance& instance, VkSurfaceKHR& surface, VkPhysicalDeviceFeatures& desiredFeatures)
 {
 	uint32_t physicalDeviceCount = 0;
