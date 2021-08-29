@@ -4,22 +4,13 @@
 
 #include "Device.h"
 
-struct Binding {
-
-};
-
-struct Attribute {
-	VkVertexInputAttributeDescription Description;
-
-	Attribute(VkFormat format) {
-		Description.format = format;
-	}
-};
-
 class Buffer {
 public:
-	virtual void Bind(VkCommandBuffer& cmdBuffer) = 0;
+	~Buffer();
 
+	inline const VkBuffer& GetBufferHandle() const { return m_Buffer; }
+
+	void Map(VkDeviceSize size, void* data);
 protected:
 	void CreateAndAllocateBuffer(VkBuffer& buffer, VkBufferUsageFlags usage, VkDeviceMemory& memory, VkMemoryPropertyFlags memFlags);
 	uint32_t FindMemoryTypeIndex(uint32_t typeMask, VkMemoryPropertyFlags propFlags);
@@ -31,27 +22,35 @@ protected:
 	VkDeviceMemory m_Memory;
 	VkDeviceSize m_Size;
 
-	const Device* m_Device;
+	RefPtr<Device> m_Device;
 };
 
 class VertexBuffer : public Buffer {
 public:
-	VertexBuffer(Device* device, VkCommandPool& commandPool, VkDeviceSize size, const void* data);
-	~VertexBuffer();
+	VertexBuffer(RefPtr<Device> device, VkCommandPool& commandPool, uint32_t vertexCount, VkDeviceSize size, const void* data);
 
-	virtual void Bind(VkCommandBuffer& cmdBuffer) override;
+	void Bind(VkCommandBuffer& cmdBuffer);
 
+	inline uint32_t GetVertexCount() const { return m_VertexCount; }
 private:
-	
+	uint32_t m_VertexCount;
 };
 
 class IndexBuffer : public Buffer {
 public:
-	IndexBuffer(Device* device, VkCommandPool& commandPool, VkDeviceSize size, const void* data);
-	~IndexBuffer();
+	IndexBuffer(RefPtr<Device> device, VkCommandPool& commandPool, uint32_t indexCount, VkDeviceSize size, const void* data);
+	
+	void Bind(VkCommandBuffer& cmdBuffer);
 
-	virtual void Bind(VkCommandBuffer& cmdBuffer) override;
+	inline uint32_t GetIndexCount() const { return m_IndexCount; }
+private:
+	uint32_t m_IndexCount;
+};
+
+class UniformBuffer : public Buffer {
+public:
+	UniformBuffer(RefPtr<Device> device, VkDeviceSize size);
 
 private:
-
+	
 };

@@ -5,17 +5,17 @@
 #include "GraphicsPipeline.h"
 
 static struct GraphicsObjects {
-	ScopedPtr<Device> GPU;
-	ScopedPtr<GraphicsPipeline> Pipeline;
+	RefPtr<Device> GPU;
+	RefPtr<GraphicsPipeline> Pipeline;
 }* s_Objects = new GraphicsObjects;
 
-void Graphics::Init(Window* window)
+void Graphics::Init(ScopedPtr<Window>& window)
 {
 	VkPhysicalDeviceFeatures deviceFeatures{};
 	deviceFeatures.geometryShader = 1;
 
 	s_Objects->GPU = MakeScopedPtr<Device>(window->GetGraphicsContext().GetInstance(), window->GetSurface().GetSurfaceHandle(), deviceFeatures);
-	s_Objects->Pipeline = MakeScopedPtr<GraphicsPipeline>(window, s_Objects->GPU.get());
+	s_Objects->Pipeline = MakeScopedPtr<GraphicsPipeline>(window, s_Objects->GPU);
 }
 
 void Graphics::Present()

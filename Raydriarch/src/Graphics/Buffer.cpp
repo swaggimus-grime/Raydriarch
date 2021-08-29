@@ -1,6 +1,20 @@
 #include "raydpch.h"
 #include "Buffer.h"
 
+Buffer::~Buffer()
+{
+	vkDestroyBuffer(m_Device->GetDeviceHandle(), m_Buffer, nullptr);
+	vkFreeMemory(m_Device->GetDeviceHandle(), m_Memory, nullptr);
+}
+
+void Buffer::Map(VkDeviceSize size, void* data)
+{
+	void* mappedData;
+	vkMapMemory(m_Device->GetDeviceHandle(), m_Memory, 0, size, 0, &mappedData);
+	memcpy(mappedData, data, size);
+	vkUnmapMemory(m_Device->GetDeviceHandle(), m_Memory);
+}
+
 void Buffer::MapData(VkDeviceMemory& memory, const void* data)
 {
 	void* mappedData;
@@ -46,13 +60,13 @@ void Buffer::CopyBuffer(const VkCommandPool& commandPool, VkBuffer& srcBuffer, V
 
 void Buffer::CreateAndAllocateBuffer(VkBuffer& buffer, VkBufferUsageFlags usage, VkDeviceMemory& memory, VkMemoryPropertyFlags memFlags)
 {
-	VkBufferCreateInfo vertexBufferInfo{};
-	vertexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	vertexBufferInfo.size = m_Size;
-	vertexBufferInfo.usage = usage;
-	vertexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	VkBufferCreateInfo bufferInfo{};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.size = m_Size;
+	bufferInfo.usage = usage;
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-	RAYD_VK_VALIDATE(vkCreateBuffer(m_Device->GetDeviceHandle(), &vertexBufferInfo, nullptr, &buffer), "Failed to create vertex buffer!");
+	RAYD_VK_VALIDATE(vkCreateBuffer(m_Device->GetDeviceHandle(), &bufferInfo, nullptr, &buffer), "Failed to create buffer!");
 
 	VkMemoryRequirements memReqs;
 	vkGetBufferMemoryRequirements(m_Device->GetDeviceHandle(), buffer, &memReqs);
@@ -79,7 +93,8 @@ uint32_t Buffer::FindMemoryTypeIndex(uint32_t typeMask, VkMemoryPropertyFlags pr
 	RAYD_ERROR("Failed to find suitable memory type!");
 }
 
-VertexBuffer::VertexBuffer(Device* device, VkCommandPool& commandPool, VkDeviceSize size, const void* data)
+VertexBuffer::VertexBuffer(RefPtr<Device> device, VkCommandPool& commandPool, uint32_t vertexCount, VkDeviceSize size, const void* data)
+	:m_VertexCount(vertexCount)
 {
 	m_Device = device;
 	m_Size = size;
@@ -96,19 +111,14 @@ VertexBuffer::VertexBuffer(Device* device, VkCommandPool& commandPool, VkDeviceS
 	vkFreeMemory(m_Device->GetDeviceHandle(), stagingMem, nullptr);
 }
 
-VertexBuffer::~VertexBuffer()
-{
-	vkDestroyBuffer(m_Device->GetDeviceHandle(), m_Buffer, nullptr);
-	vkFreeMemory(m_Device->GetDeviceHandle(), m_Memory, nullptr);
-}
-
 void VertexBuffer::Bind(VkCommandBuffer& cmdBuffer)
 {
 	const VkDeviceSize offset = 0;
 	vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &m_Buffer, &offset);
 }
 
-IndexBuffer::IndexBuffer(Device* device, VkCommandPool& commandPool, VkDeviceSize size, const void* data)
+IndexBuffer::IndexBuffer(RefPtr<Device> device, VkCommandPool& commandPool, uint32_t indexCount, VkDeviceSize size, const void* data)
+	:m_IndexCount(indexCount)
 {
 	m_Device = device;
 	m_Size = size;
@@ -125,14 +135,15 @@ IndexBuffer::IndexBuffer(Device* device, VkCommandPool& commandPool, VkDeviceSiz
 	vkFreeMemory(m_Device->GetDeviceHandle(), stagingMem, nullptr);
 }
 
-IndexBuffer::~IndexBuffer()
-{
-	vkDestroyBuffer(m_Device->GetDeviceHandle(), m_Buffer, nullptr);
-	vkFreeMemory(m_Device->GetDeviceHandle(), m_Memory, nullptr);
-}
-
 void IndexBuffer::Bind(VkCommandBuffer& cmdBuffer)
 {
 	vkCmdBindIndexBuffer(cmdBuffer, m_Buffer, 0, VK_INDEX_TYPE_UINT16);
 }
 
+UniformBuffer::UniformBuffer(RefPtr<Device> device, VkDeviceSize size)
+{
+	m_Device = device;
+	m_Size = size;
+
+	CreateAndAllocateBuffer(m_Buffer, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, m_Memory, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+}

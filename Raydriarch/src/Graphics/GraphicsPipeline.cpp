@@ -22,35 +22,31 @@ const std::vector<uint16_t> indices = {
 //Defines max number of frames that are allowed to be processed by the graphics pipeline 
 #define MAX_FRAMES_IN_FLIGHT 2
 
-GraphicsPipeline::GraphicsPipeline(Window* window, Device* device)
-	:m_Device(device)
+GraphicsPipeline::GraphicsPipeline(ScopedPtr<Window>& window, RefPtr<Device> device)
+	:m_Window(window), m_Device(device)
 {
 	auto [width, height] = window->GetFramebufferSize();
-	m_SwapChain = MakeScopedPtr<SwapChain>(device, window->GetSurface().GetSurfaceHandle(), width, height);
+	m_SwapChain = MakeScopedPtr<SwapChain>(m_Device, window->GetSurface().GetSurfaceHandle(), width, height);
 
-	ScopedPtr<Shader> shader = MakeScopedPtr<Shader>(m_Device->GetDeviceHandle(), "res/shaders/vert.spv", "res/shaders/frag.spv");
+	m_Shader = MakeScopedPtr<Shader>(m_Device->GetDeviceHandle(), "res/shaders/vert.spv", "res/shaders/frag.spv");
 
-	CreatePipeline(shader.get());
-	CreateFramebuffers();
+	CreatePipeline();
+	CreateCommandPool();
 	AllocateCommandBuffers();
 	CreateSyncObjects();
 }
 
 GraphicsPipeline::~GraphicsPipeline()
 {
-	for (auto& framebuffer : m_Framebuffers) 
-		vkDestroyFramebuffer(m_Device->GetDeviceHandle(), framebuffer, nullptr);
-
 	vkDestroyPipeline(m_Device->GetDeviceHandle(), m_Pipeline, nullptr);
 	vkDestroyPipelineLayout(m_Device->GetDeviceHandle(), m_PipelineLayout, nullptr);
-	vkDestroyRenderPass(m_Device->GetDeviceHandle(), m_RenderPass, nullptr);
 
 	for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroySemaphore(m_Device->GetDeviceHandle(), m_ImageAvailableSemaphores[i], nullptr);
 		vkDestroySemaphore(m_Device->GetDeviceHandle(), m_RenderFinishedSemaphores[i], nullptr);
 		vkDestroyFence(m_Device->GetDeviceHandle(), m_InFlightFences[i], nullptr);
 	}
-		
+
 	vkDestroyCommandPool(m_Device->GetDeviceHandle(), m_CommandPool, nullptr);
 }
 
@@ -63,7 +59,7 @@ void GraphicsPipeline::Present()
 	uint32_t imageIndex;
 	vkAcquireNextImageKHR(m_Device->GetDeviceHandle(), m_SwapChain->GetSwapChainHandle(), UINT64_MAX, m_ImageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
 
-	if (m_ImagesInFlight[imageIndex] != VK_NULL_HANDLE) 
+	if (m_ImagesInFlight[imageIndex] != VK_NULL_HANDLE)
 		vkWaitForFences(m_Device->GetDeviceHandle(), 1, &m_ImagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
 
 	m_ImagesInFlight[imageIndex] = m_InFlightFences[currentFrame];
@@ -86,9 +82,10 @@ void GraphicsPipeline::Present()
 
 	vkResetFences(m_Device->GetDeviceHandle(), 1, &m_InFlightFences[currentFrame]);
 
-	RAYD_VK_VALIDATE(vkQueueSubmit(m_Device->GetQueueFamilies().Graphics.Queue, 1, &submitInfo, m_InFlightFences[currentFrame]), 
-		"Failed to submit command buffer to graphics queue!")
-	VkPresentInfoKHR presentInfo{};
+	RAYD_VK_VALIDATE(vkQueueSubmit(m_Device->GetQueueFamilies().Graphics.Queue, 1, &submitInfo, m_InFlightFences[currentFrame]),
+		"Failed to submit command buffer to graphics queue!");
+
+	VkPresentInfoKHR presentInfo {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
 	presentInfo.waitSemaphoreCount = 1;
@@ -100,8 +97,30 @@ void GraphicsPipeline::Present()
 
 	presentInfo.pImageIndices = &imageIndex;
 
-	vkQueuePresentKHR(m_Device->GetQueueFamilies().Present.Queue, &presentInfo);
+	if (VkResult result = vkQueuePresentKHR(m_Device->GetQueueFamilies().Present.Queue, &presentInfo);
+		result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+		auto [width, height] = m_Window->GetFramebufferSize();
+		while (width == 0 || height == 0) {
+			width = m_Window->GetFramebufferWidth();
+			height = m_Window->GetFramebufferHeight();
+			glfwWaitEvents();
+		}
 
+		vkDeviceWaitIdle(m_Device->GetDeviceHandle());
+
+		m_SwapChain.reset();
+		vkDestroyPipeline(m_Device->GetDeviceHandle(), m_Pipeline, nullptr);
+		vkDestroyPipelineLayout(m_Device->GetDeviceHandle(), m_PipelineLayout, nullptr);
+
+		m_SwapChain = MakeScopedPtr<SwapChain>(m_Device, m_Window->GetSurface().GetSurfaceHandle(), width, height);
+		CreatePipeline();
+		AllocateCommandBuffers();
+
+		m_ImagesInFlight.resize(m_SwapChain->GetImages().size(), VK_NULL_HANDLE);
+	}
+	else if (result != VK_SUCCESS)
+		RAYD_ERROR("Failed to rebuild swap chain!");
+	
 	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
@@ -112,19 +131,19 @@ void GraphicsPipeline::Shutdown()
 	delete m_IndexBuffer;
 }
 
-void GraphicsPipeline::CreatePipeline(Shader* shader)
+void GraphicsPipeline::CreatePipeline()
 {
 	//Configure pipeline
 	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-	vertShaderStageInfo.module = shader->GetVertexShaderModule();
+	vertShaderStageInfo.module = m_Shader->GetVertexShaderModule();
 	vertShaderStageInfo.pName = "main";
 
 	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
 	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	fragShaderStageInfo.module = shader->GetFragmentShaderModule();
+	fragShaderStageInfo.module = m_Shader->GetFragmentShaderModule();
 	fragShaderStageInfo.pName = "main";
 
 	VkVertexInputBindingDescription bindingDescription{};
@@ -215,46 +234,6 @@ void GraphicsPipeline::CreatePipeline(Shader* shader)
 	RAYD_VK_VALIDATE(vkCreatePipelineLayout(m_Device->GetDeviceHandle(), &pipelineLayoutInfo, nullptr, &m_PipelineLayout),
 		"Failed to create pipeline layout!");
 
-	VkAttachmentDescription colorAttachment{};
-	colorAttachment.format = m_SwapChain->GetFormat();
-	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-	VkAttachmentReference colorAttachmentRef{};
-	colorAttachmentRef.attachment = 0;
-	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-	VkSubpassDescription subpass{};
-	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass.colorAttachmentCount = 1;
-	subpass.pColorAttachments = &colorAttachmentRef;
-
-	VkRenderPassCreateInfo renderPassInfo{};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	renderPassInfo.attachmentCount = 1;
-	renderPassInfo.pAttachments = &colorAttachment;
-	renderPassInfo.subpassCount = 1;
-	renderPassInfo.pSubpasses = &subpass;
-
-	VkSubpassDependency dependency{};
-	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-	dependency.dstSubpass = 0;
-	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.srcAccessMask = 0;
-	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-	renderPassInfo.dependencyCount = 1;
-	renderPassInfo.pDependencies = &dependency;
-
-	RAYD_VK_VALIDATE(vkCreateRenderPass(m_Device->GetDeviceHandle(), &renderPassInfo, nullptr, &m_RenderPass),
-		"Failed to create render pass!");
-
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineInfo.stageCount = 2;
@@ -267,33 +246,14 @@ void GraphicsPipeline::CreatePipeline(Shader* shader)
 	pipelineInfo.pMultisampleState = &multisamplingInfo;
 	pipelineInfo.pColorBlendState = &colorBlendInfo;
 	pipelineInfo.layout = m_PipelineLayout;
-	pipelineInfo.renderPass = m_RenderPass;
+	pipelineInfo.renderPass = m_SwapChain->GetRenderPass().GetRenderPassHandle();
 	pipelineInfo.subpass = 0;
 
 	RAYD_VK_VALIDATE(vkCreateGraphicsPipelines(m_Device->GetDeviceHandle(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_Pipeline),
 		"Failed to create graphics pipeline!");
 }
 
-void GraphicsPipeline::CreateFramebuffers()
-{
-	m_Framebuffers.resize(m_SwapChain->GetImageViews().size());
-
-	for (size_t i = 0; i < m_Framebuffers.size(); i++) {
-		VkFramebufferCreateInfo framebufferInfo{};
-		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		framebufferInfo.renderPass = m_RenderPass;
-		framebufferInfo.attachmentCount = 1;
-		framebufferInfo.pAttachments = &m_SwapChain->GetImageViews()[i];
-		framebufferInfo.width = m_SwapChain->GetExtent().width;
-		framebufferInfo.height = m_SwapChain->GetExtent().height;
-		framebufferInfo.layers = 1;
-
-		RAYD_VK_VALIDATE(vkCreateFramebuffer(m_Device->GetDeviceHandle(), &framebufferInfo, nullptr, &m_Framebuffers[i]),
-			"Failed to create framebuffer!");
-	}
-}
-
-void GraphicsPipeline::AllocateCommandBuffers()
+void GraphicsPipeline::CreateCommandPool()
 {
 	VkCommandPoolCreateInfo commandPoolInfo{};
 	commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -302,10 +262,13 @@ void GraphicsPipeline::AllocateCommandBuffers()
 	RAYD_VK_VALIDATE(vkCreateCommandPool(m_Device->GetDeviceHandle(), &commandPoolInfo, nullptr, &m_CommandPool),
 		"Failed to create command pool!");
 
-	m_VertexBuffer = new VertexBuffer(m_Device, m_CommandPool, vertices.size() * sizeof(Vertex), vertices.data());
-	m_IndexBuffer = new IndexBuffer(m_Device, m_CommandPool, indices.size() * sizeof(uint16_t), indices.data());
+	m_VertexBuffer = new VertexBuffer(m_Device, m_CommandPool, vertices.size(), vertices.size() * sizeof(Vertex), vertices.data());
+	m_IndexBuffer = new IndexBuffer(m_Device, m_CommandPool, indices.size(), indices.size() * sizeof(uint16_t), indices.data());
+}
 
-	m_CommandBuffers.resize(m_Framebuffers.size());
+void GraphicsPipeline::AllocateCommandBuffers()
+{
+	m_CommandBuffers.resize(m_SwapChain->GetFramebuffers().size());
 
 	VkCommandBufferAllocateInfo allocateInfo{};
 	allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -324,8 +287,8 @@ void GraphicsPipeline::AllocateCommandBuffers()
 
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassInfo.renderPass = m_RenderPass;
-		renderPassInfo.framebuffer = m_Framebuffers[i];
+		renderPassInfo.renderPass = m_SwapChain->GetRenderPass().GetRenderPassHandle();
+		renderPassInfo.framebuffer = m_SwapChain->GetFramebuffers()[i];
 		renderPassInfo.renderArea.offset = { 0, 0 };
 		renderPassInfo.renderArea.extent = m_SwapChain->GetExtent();
 		VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
