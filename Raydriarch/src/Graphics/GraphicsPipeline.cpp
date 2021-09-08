@@ -2,6 +2,7 @@
 #include "GraphicsPipeline.h"
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 struct Vertex {
 	glm::vec2 Position;
@@ -19,6 +20,12 @@ const std::vector<uint16_t> indices = {
 	0, 1, 2, 2, 3, 0
 };
 
+struct UniformBufferObject {
+	glm::mat4 model;
+	glm::mat4 view;
+	glm::mat4 proj;
+};
+
 //Defines max number of frames that are allowed to be processed by the graphics pipeline 
 #define MAX_FRAMES_IN_FLIGHT 2
 
@@ -30,8 +37,12 @@ GraphicsPipeline::GraphicsPipeline(ScopedPtr<Window>& window, RefPtr<Device> dev
 
 	m_Shader = MakeScopedPtr<Shader>(m_Device->GetDeviceHandle(), "res/shaders/vert.spv", "res/shaders/frag.spv");
 
+	CreateDescriptorSetLayout();
 	CreatePipeline();
 	CreateCommandPool();
+	CreateUniformBuffers();
+	m_DescriptorPool = MakeScopedPtr<DescriptorPool>(m_Device, m_SwapChain->GetImages().size());
+	CreateDescriptorSets();
 	AllocateCommandBuffers();
 	CreateSyncObjects();
 }
@@ -63,6 +74,19 @@ void GraphicsPipeline::Present()
 		vkWaitForFences(m_Device->GetDeviceHandle(), 1, &m_ImagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
 
 	m_ImagesInFlight[imageIndex] = m_InFlightFences[currentFrame];
+
+	static auto startTime = std::chrono::high_resolution_clock::now();
+
+	auto currentTime = std::chrono::high_resolution_clock::now();
+	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+	UniformBufferObject ubo{};
+	ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.proj = glm::perspective(glm::radians(45.0f), m_SwapChain->GetExtent().width / (float)m_SwapChain->GetExtent().height, 0.1f, 10.0f);
+	ubo.proj[1][1] *= -1;
+
+	m_UniformBuffers[imageIndex]->Map(sizeof(ubo), &ubo);
 
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -129,6 +153,48 @@ void GraphicsPipeline::Shutdown()
 	vkDeviceWaitIdle(m_Device->GetDeviceHandle());
 	delete m_VertexBuffer;
 	delete m_IndexBuffer;
+}
+
+void GraphicsPipeline::CreateDescriptorSetLayout()
+{
+	VkDescriptorSetLayoutBinding uboLayoutBinding{};
+	uboLayoutBinding.binding = 0;
+	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uboLayoutBinding.descriptorCount = 1;
+	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+	m_DescriptorSetLayout = MakeScopedPtr<DescriptorSetLayout>(m_Device, 1, &uboLayoutBinding);
+}
+
+void GraphicsPipeline::CreateDescriptorSets()
+{
+	std::vector<VkDescriptorSetLayout> layouts(m_SwapChain->GetNumFramebuffers(), m_DescriptorSetLayout->GetLayoutHandle());
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool = m_DescriptorPool->GetPoolHandle();
+	allocInfo.descriptorSetCount = static_cast<uint32_t>(m_SwapChain->GetNumFramebuffers());
+	allocInfo.pSetLayouts = layouts.data();
+
+	m_DescriptorSets.resize(m_SwapChain->GetNumFramebuffers());
+	RAYD_VK_VALIDATE(vkAllocateDescriptorSets(m_Device->GetDeviceHandle(), &allocInfo, m_DescriptorSets.data()), "Failed to allocate descriptor sets!");
+
+	for (size_t i = 0; i < m_SwapChain->GetNumFramebuffers(); i++) {
+		VkDescriptorBufferInfo bufferInfo{};
+		bufferInfo.buffer = m_UniformBuffers[i]->GetBufferHandle();
+		bufferInfo.offset = 0;
+		bufferInfo.range = sizeof(UniformBufferObject);
+
+		VkWriteDescriptorSet descriptorWrite{};
+		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrite.dstSet = m_DescriptorSets[i];
+		descriptorWrite.dstBinding = 0;
+		descriptorWrite.dstArrayElement = 0;
+		descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrite.descriptorCount = 1;
+		descriptorWrite.pBufferInfo = &bufferInfo;
+
+		vkUpdateDescriptorSets(m_Device->GetDeviceHandle(), 1, &descriptorWrite, 0, nullptr);
+	}
 }
 
 void GraphicsPipeline::CreatePipeline()
@@ -203,7 +269,7 @@ void GraphicsPipeline::CreatePipeline()
 	rasterInfo.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterInfo.lineWidth = 1.f;
 	rasterInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-	rasterInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	rasterInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterInfo.depthBiasEnable = VK_FALSE;
 
 	VkPipelineMultisampleStateCreateInfo multisamplingInfo{};
@@ -227,9 +293,12 @@ void GraphicsPipeline::CreatePipeline()
 	colorBlendInfo.logicOp = VK_LOGIC_OP_COPY; // Optional
 	colorBlendInfo.attachmentCount = 1;
 	colorBlendInfo.pAttachments = &colorBlendAttachmentInfo;
+	
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &m_DescriptorSetLayout->GetLayoutHandle();
 
 	RAYD_VK_VALIDATE(vkCreatePipelineLayout(m_Device->GetDeviceHandle(), &pipelineLayoutInfo, nullptr, &m_PipelineLayout),
 		"Failed to create pipeline layout!");
@@ -297,6 +366,7 @@ void GraphicsPipeline::AllocateCommandBuffers()
 
 		vkCmdBeginRenderPass(m_CommandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 		vkCmdBindPipeline(m_CommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
+		vkCmdBindDescriptorSets(m_CommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[i], 0, nullptr);
 		m_VertexBuffer->Bind(m_CommandBuffers[i]);
 		m_IndexBuffer->Bind(m_CommandBuffers[i]);
 
@@ -329,4 +399,12 @@ void GraphicsPipeline::CreateSyncObjects()
 		RAYD_VK_VALIDATE(vkCreateFence(m_Device->GetDeviceHandle(), &fenceInfo, nullptr, &m_InFlightFences[i]),
 			"Failed to create fence!");
 	}
+}
+
+void GraphicsPipeline::CreateUniformBuffers()
+{
+	m_UniformBuffers.resize(m_SwapChain->GetImages().size());
+
+	for (auto& buffer : m_UniformBuffers)
+		buffer = MakeScopedPtr<UniformBuffer>(m_Device, sizeof(UniformBufferObject));
 }

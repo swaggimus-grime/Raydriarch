@@ -12,7 +12,7 @@ public:
 		uint32_t framebufferWidth, uint32_t framebufferHeight);
 	~SwapChain();
 
-
+	inline size_t GetNumFramebuffers() const { return m_Framebuffers.size(); }
 	inline const VkSwapchainKHR& GetSwapChainHandle() const { return m_SwapChain; }
 	inline const RenderPass& GetRenderPass() const { return *m_RenderPass; }
 

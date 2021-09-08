@@ -10,7 +10,7 @@ Buffer::~Buffer()
 void Buffer::Map(VkDeviceSize size, void* data)
 {
 	void* mappedData;
-	vkMapMemory(m_Device->GetDeviceHandle(), m_Memory, 0, size, 0, &mappedData);
+	RAYD_VK_VALIDATE(vkMapMemory(m_Device->GetDeviceHandle(), m_Memory, 0, size, 0, &mappedData), "Failed to map to memory!");
 	memcpy(mappedData, data, size);
 	vkUnmapMemory(m_Device->GetDeviceHandle(), m_Memory);
 }
