@@ -1324,6 +1324,7 @@
       <Filter>vendor\glm\glm</Filter>
     </ClInclude>
     <ClInclude Include="src\Graphics\Descriptor.h" />
+    <ClInclude Include="src\Graphics\Command.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Core\App.cpp">
@@ -1366,5 +1367,6 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\Graphics\Descriptor.cpp" />
+    <ClCompile Include="src\Graphics\Command.cpp" />
   </ItemGroup>
 </Project>

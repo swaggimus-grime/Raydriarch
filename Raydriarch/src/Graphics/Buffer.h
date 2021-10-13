@@ -15,7 +15,6 @@ protected:
 	void CreateAndAllocateBuffer(VkBuffer& buffer, VkBufferUsageFlags usage, VkDeviceMemory& memory, VkMemoryPropertyFlags memFlags);
 	uint32_t FindMemoryTypeIndex(uint32_t typeMask, VkMemoryPropertyFlags propFlags);
 	void MapData(VkDeviceMemory& memory, const void* data);
-	void CopyBuffer(const VkCommandPool& commandPool, VkBuffer& srcBuffer, VkBuffer& dstBuffer);
 
 protected:
 	VkBuffer m_Buffer;
@@ -25,9 +24,15 @@ protected:
 	RefPtr<Device> m_Device;
 };
 
+struct Attribute {
+	uint32_t Binding;
+	uint32_t Location;
+	VkFormat Format;
+};
+
 class VertexBuffer : public Buffer {
 public:
-	VertexBuffer(RefPtr<Device> device, VkCommandPool& commandPool, uint32_t vertexCount, VkDeviceSize size, const void* data);
+	VertexBuffer(RefPtr<Device> device, uint32_t vertexCount, VkDeviceSize size, const void* data);
 
 	void Bind(VkCommandBuffer& cmdBuffer);
 
@@ -38,13 +43,29 @@ private:
 
 class IndexBuffer : public Buffer {
 public:
-	IndexBuffer(RefPtr<Device> device, VkCommandPool& commandPool, uint32_t indexCount, VkDeviceSize size, const void* data);
+	IndexBuffer(RefPtr<Device> device, uint32_t indexCount, VkDeviceSize size, const void* data);
 	
 	void Bind(VkCommandBuffer& cmdBuffer);
 
 	inline uint32_t GetIndexCount() const { return m_IndexCount; }
 private:
 	uint32_t m_IndexCount;
+};
+
+class VertexLayout {
+public:
+	VertexLayout() = default;
+	void AddAttribute(uint32_t location, uint32_t binding, VkFormat format);
+	void AddBinding(uint32_t binding, uint32_t stride, VkVertexInputRate inputRate);
+
+	inline const uint32_t GetNumAttributes() const { return m_AttribDescriptions.size(); }
+	inline const VkVertexInputAttributeDescription* GetAttributes() const { return m_AttribDescriptions.data(); }
+	inline const VkVertexInputBindingDescription* GetBindings() const { return m_Bindings.data(); }
+private:
+	uint32_t CalculateOffset(VkFormat format);
+private:
+	std::vector<VkVertexInputAttributeDescription> m_AttribDescriptions;
+	std::vector<VkVertexInputBindingDescription> m_Bindings;
 };
 
 class UniformBuffer : public Buffer {

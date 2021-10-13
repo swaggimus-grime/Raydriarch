@@ -17,8 +17,11 @@ App::~App()
 void App::Run()
 {
 	while (!m_Window->IsClosed()) {
+		static auto startTime = std::chrono::high_resolution_clock::now();
+		float deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - startTime).count();
+
 		m_Window->Update();
-		Graphics::Present();
+		Graphics::Present(deltaTime);
 	}
 
 }

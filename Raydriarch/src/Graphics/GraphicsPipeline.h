@@ -8,21 +8,25 @@
 
 class GraphicsPipeline {
 public:
-	GraphicsPipeline(ScopedPtr<Window>& window, RefPtr<Device> device);
+	GraphicsPipeline(ScopedPtr<class Window>& window, RefPtr<Device> device, RefPtr<SwapChain> swapchain, ScopedPtr<Shader>& shader, VertexLayout& vertexLayout);
 	~GraphicsPipeline();
 
-	void Present();
+	void Present(float deltaTime);
 	void Shutdown();
+	inline const VkPipeline& GetPipelineHandle() const { return m_Pipeline; }
+	inline const VkPipelineLayout& GetPipelineLayout() const { return m_PipelineLayout; }
+	inline const std::vector<VkDescriptorSet>& GetDescriptorSets() const { return m_DescriptorSets; }
 private:
 	void CreateDescriptorSetLayout();
 	void CreateDescriptorSets();
 	void CreatePipeline();
-	void CreateCommandPool();
-	void AllocateCommandBuffers();
 	void CreateSyncObjects();
 	void CreateUniformBuffers();
 private:
 	ScopedPtr<Window>& m_Window;
+	RefPtr<Device> m_Device;
+	RefPtr<SwapChain> m_SwapChain;
+	VertexLayout& m_VertexLayout;
 
 	VkPipeline m_Pipeline;
 
@@ -30,19 +34,13 @@ private:
 	ScopedPtr<DescriptorPool> m_DescriptorPool;
 	std::vector<VkDescriptorSet> m_DescriptorSets;
 
-	RefPtr<Device> m_Device;
-	ScopedPtr<SwapChain> m_SwapChain;
-
 	VkPipelineLayout m_PipelineLayout;
-
-	VkCommandPool m_CommandPool;
-	std::vector<VkCommandBuffer> m_CommandBuffers;
 
 	VertexBuffer* m_VertexBuffer;
 	IndexBuffer* m_IndexBuffer;
 	std::vector<ScopedPtr<UniformBuffer>> m_UniformBuffers;
 
-	ScopedPtr<Shader> m_Shader;
+	ScopedPtr<Shader>& m_Shader;
 
 	std::vector<VkSemaphore> m_ImageAvailableSemaphores;
 	std::vector<VkSemaphore> m_RenderFinishedSemaphores;

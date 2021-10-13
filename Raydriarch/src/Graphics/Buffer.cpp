@@ -1,6 +1,8 @@
 #include "raydpch.h"
 #include "Buffer.h"
 
+#include "Command.h"
+
 Buffer::~Buffer()
 {
 	vkDestroyBuffer(m_Device->GetDeviceHandle(), m_Buffer, nullptr);
@@ -21,41 +23,6 @@ void Buffer::MapData(VkDeviceMemory& memory, const void* data)
 	vkMapMemory(m_Device->GetDeviceHandle(), memory, 0, m_Size, 0, &mappedData);
 	memcpy(mappedData, data, static_cast<size_t>(m_Size));
 	vkUnmapMemory(m_Device->GetDeviceHandle(), memory);
-}
-
-void Buffer::CopyBuffer(const VkCommandPool& commandPool, VkBuffer& srcBuffer, VkBuffer& dstBuffer)
-{
-
-	VkCommandBufferAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = commandPool;
-	allocInfo.commandBufferCount = 1;
-
-	VkCommandBuffer commandBuffer;
-	vkAllocateCommandBuffers(m_Device->GetDeviceHandle(), &allocInfo, &commandBuffer);
-
-	VkCommandBufferBeginInfo beginInfo{};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-	vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-	VkBufferCopy copyRegion{};
-	copyRegion.size = m_Size;
-	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
-
-	vkEndCommandBuffer(commandBuffer);
-
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffer;
-
-	vkQueueSubmit(m_Device->GetQueueFamilies().Graphics.Queue, 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(m_Device->GetQueueFamilies().Graphics.Queue);
-
-	vkFreeCommandBuffers(m_Device->GetDeviceHandle(), commandPool, 1, &commandBuffer);
 }
 
 void Buffer::CreateAndAllocateBuffer(VkBuffer& buffer, VkBufferUsageFlags usage, VkDeviceMemory& memory, VkMemoryPropertyFlags memFlags)
@@ -93,7 +60,7 @@ uint32_t Buffer::FindMemoryTypeIndex(uint32_t typeMask, VkMemoryPropertyFlags pr
 	RAYD_ERROR("Failed to find suitable memory type!");
 }
 
-VertexBuffer::VertexBuffer(RefPtr<Device> device, VkCommandPool& commandPool, uint32_t vertexCount, VkDeviceSize size, const void* data)
+VertexBuffer::VertexBuffer(RefPtr<Device> device, uint32_t vertexCount, VkDeviceSize size, const void* data)
 	:m_VertexCount(vertexCount)
 {
 	m_Device = device;
@@ -105,7 +72,7 @@ VertexBuffer::VertexBuffer(RefPtr<Device> device, VkCommandPool& commandPool, ui
 	MapData(stagingMem, data);
 
 	CreateAndAllocateBuffer(m_Buffer, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, m_Memory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	CopyBuffer(commandPool, stagingBuffer, m_Buffer);
+	Command::CopyBuffer(m_Size, stagingBuffer, m_Buffer);
 
 	vkDestroyBuffer(m_Device->GetDeviceHandle(), stagingBuffer, nullptr);
 	vkFreeMemory(m_Device->GetDeviceHandle(), stagingMem, nullptr);
@@ -117,7 +84,7 @@ void VertexBuffer::Bind(VkCommandBuffer& cmdBuffer)
 	vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &m_Buffer, &offset);
 }
 
-IndexBuffer::IndexBuffer(RefPtr<Device> device, VkCommandPool& commandPool, uint32_t indexCount, VkDeviceSize size, const void* data)
+IndexBuffer::IndexBuffer(RefPtr<Device> device, uint32_t indexCount, VkDeviceSize size, const void* data)
 	:m_IndexCount(indexCount)
 {
 	m_Device = device;
@@ -129,7 +96,7 @@ IndexBuffer::IndexBuffer(RefPtr<Device> device, VkCommandPool& commandPool, uint
 	MapData(stagingMem, data);
 
 	CreateAndAllocateBuffer(m_Buffer, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, m_Memory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	CopyBuffer(commandPool, stagingBuffer, m_Buffer);
+	Command::CopyBuffer(m_Size, stagingBuffer, m_Buffer);
 
 	vkDestroyBuffer(m_Device->GetDeviceHandle(), stagingBuffer, nullptr);
 	vkFreeMemory(m_Device->GetDeviceHandle(), stagingMem, nullptr);
@@ -146,4 +113,31 @@ UniformBuffer::UniformBuffer(RefPtr<Device> device, VkDeviceSize size)
 	m_Size = size;
 
 	CreateAndAllocateBuffer(m_Buffer, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, m_Memory, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+}
+
+uint32_t VertexLayout::CalculateOffset(VkFormat format)
+{
+	uint32_t offset = 0;
+	switch (format) {
+	case VK_FORMAT_R32G32_SFLOAT:
+		offset = 2 * 4;
+		break;
+	case VK_FORMAT_R32G32B32_SFLOAT:
+		offset = 3 * 4;
+		break;
+	default:
+		RAYD_ERROR("Unsupported format!");
+	}
+
+	return offset;
+}
+
+void VertexLayout::AddAttribute(uint32_t location, uint32_t binding, VkFormat format)
+{
+	m_AttribDescriptions.push_back({ location, binding, format, CalculateOffset(format)});
+}
+
+void VertexLayout::AddBinding(uint32_t binding, uint32_t stride, VkVertexInputRate inputRate)
+{
+	m_Bindings.push_back({ binding, stride, inputRate });
 }

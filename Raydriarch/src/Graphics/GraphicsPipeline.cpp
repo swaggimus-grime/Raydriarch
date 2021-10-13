@@ -1,24 +1,10 @@
 #include "raydpch.h"
 #include "GraphicsPipeline.h"
 
+#include "Command.h"
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-
-struct Vertex {
-	glm::vec2 Position;
-	glm::vec3 Color;
-};
-
-const std::vector<Vertex> vertices = {
-	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-	{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-	{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
-};
-
-const std::vector<uint16_t> indices = {
-	0, 1, 2, 2, 3, 0
-};
 
 struct UniformBufferObject {
 	glm::mat4 model;
@@ -29,21 +15,14 @@ struct UniformBufferObject {
 //Defines max number of frames that are allowed to be processed by the graphics pipeline 
 #define MAX_FRAMES_IN_FLIGHT 2
 
-GraphicsPipeline::GraphicsPipeline(ScopedPtr<Window>& window, RefPtr<Device> device)
-	:m_Window(window), m_Device(device)
+GraphicsPipeline::GraphicsPipeline(ScopedPtr<Window>& window, RefPtr<Device> device, RefPtr<SwapChain> swapchain, ScopedPtr<Shader>& shader, VertexLayout& vertexLayout)
+	:m_Window(window), m_Device(device), m_SwapChain(swapchain), m_Shader(shader), m_VertexLayout(vertexLayout)
 {
-	auto [width, height] = window->GetFramebufferSize();
-	m_SwapChain = MakeScopedPtr<SwapChain>(m_Device, window->GetSurface().GetSurfaceHandle(), width, height);
-
-	m_Shader = MakeScopedPtr<Shader>(m_Device->GetDeviceHandle(), "res/shaders/vert.spv", "res/shaders/frag.spv");
-
 	CreateDescriptorSetLayout();
 	CreatePipeline();
-	CreateCommandPool();
 	CreateUniformBuffers();
 	m_DescriptorPool = MakeScopedPtr<DescriptorPool>(m_Device, m_SwapChain->GetImages().size());
 	CreateDescriptorSets();
-	AllocateCommandBuffers();
 	CreateSyncObjects();
 }
 
@@ -57,11 +36,9 @@ GraphicsPipeline::~GraphicsPipeline()
 		vkDestroySemaphore(m_Device->GetDeviceHandle(), m_RenderFinishedSemaphores[i], nullptr);
 		vkDestroyFence(m_Device->GetDeviceHandle(), m_InFlightFences[i], nullptr);
 	}
-
-	vkDestroyCommandPool(m_Device->GetDeviceHandle(), m_CommandPool, nullptr);
 }
 
-void GraphicsPipeline::Present()
+void GraphicsPipeline::Present(float deltaTime)
 {
 	static uint32_t currentFrame = 0;
 
@@ -75,13 +52,8 @@ void GraphicsPipeline::Present()
 
 	m_ImagesInFlight[imageIndex] = m_InFlightFences[currentFrame];
 
-	static auto startTime = std::chrono::high_resolution_clock::now();
-
-	auto currentTime = std::chrono::high_resolution_clock::now();
-	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
 	UniformBufferObject ubo{};
-	ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.model = glm::rotate(glm::mat4(1.0f), deltaTime * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 	ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 	ubo.proj = glm::perspective(glm::radians(45.0f), m_SwapChain->GetExtent().width / (float)m_SwapChain->GetExtent().height, 0.1f, 10.0f);
 	ubo.proj[1][1] *= -1;
@@ -98,7 +70,7 @@ void GraphicsPipeline::Present()
 	submitInfo.pWaitDstStageMask = waitStages;
 
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &m_CommandBuffers[imageIndex];
+	submitInfo.pCommandBuffers = &Command::GetCommandBuffers()[imageIndex];
 
 	VkSemaphore signalSemaphores[] = { m_RenderFinishedSemaphores[currentFrame] };
 	submitInfo.signalSemaphoreCount = 1;
@@ -138,7 +110,6 @@ void GraphicsPipeline::Present()
 
 		m_SwapChain = MakeScopedPtr<SwapChain>(m_Device, m_Window->GetSurface().GetSurfaceHandle(), width, height);
 		CreatePipeline();
-		AllocateCommandBuffers();
 
 		m_ImagesInFlight.resize(m_SwapChain->GetImages().size(), VK_NULL_HANDLE);
 	}
@@ -151,8 +122,6 @@ void GraphicsPipeline::Present()
 void GraphicsPipeline::Shutdown()
 {
 	vkDeviceWaitIdle(m_Device->GetDeviceHandle());
-	delete m_VertexBuffer;
-	delete m_IndexBuffer;
 }
 
 void GraphicsPipeline::CreateDescriptorSetLayout()
@@ -212,29 +181,12 @@ void GraphicsPipeline::CreatePipeline()
 	fragShaderStageInfo.module = m_Shader->GetFragmentShaderModule();
 	fragShaderStageInfo.pName = "main";
 
-	VkVertexInputBindingDescription bindingDescription{};
-	bindingDescription.binding = 0;
-	bindingDescription.stride = sizeof(Vertex);
-	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-	std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
-
-	attributeDescriptions[0].binding = 0;
-	attributeDescriptions[0].location = 0;
-	attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
-	attributeDescriptions[0].offset = offsetof(Vertex, Position);
-
-	attributeDescriptions[1].binding = 0;
-	attributeDescriptions[1].location = 1;
-	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-	attributeDescriptions[1].offset = offsetof(Vertex, Color);
-
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+	vertexInputInfo.vertexAttributeDescriptionCount = m_VertexLayout.GetNumAttributes();
+	vertexInputInfo.pVertexBindingDescriptions = m_VertexLayout.GetBindings();
+	vertexInputInfo.pVertexAttributeDescriptions = m_VertexLayout.GetAttributes();
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{};
 	inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -322,60 +274,6 @@ void GraphicsPipeline::CreatePipeline()
 		"Failed to create graphics pipeline!");
 }
 
-void GraphicsPipeline::CreateCommandPool()
-{
-	VkCommandPoolCreateInfo commandPoolInfo{};
-	commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	commandPoolInfo.queueFamilyIndex = *m_Device->GetQueueFamilies().Graphics.Index;
-
-	RAYD_VK_VALIDATE(vkCreateCommandPool(m_Device->GetDeviceHandle(), &commandPoolInfo, nullptr, &m_CommandPool),
-		"Failed to create command pool!");
-
-	m_VertexBuffer = new VertexBuffer(m_Device, m_CommandPool, vertices.size(), vertices.size() * sizeof(Vertex), vertices.data());
-	m_IndexBuffer = new IndexBuffer(m_Device, m_CommandPool, indices.size(), indices.size() * sizeof(uint16_t), indices.data());
-}
-
-void GraphicsPipeline::AllocateCommandBuffers()
-{
-	m_CommandBuffers.resize(m_SwapChain->GetFramebuffers().size());
-
-	VkCommandBufferAllocateInfo allocateInfo{};
-	allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocateInfo.commandPool = m_CommandPool;
-	allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocateInfo.commandBufferCount = (uint32_t)m_CommandBuffers.size();
-
-	RAYD_VK_VALIDATE(vkAllocateCommandBuffers(m_Device->GetDeviceHandle(), &allocateInfo, m_CommandBuffers.data()),
-		"Failed to allocate command buffers!");
-
-	for (uint32_t i = 0; i < m_CommandBuffers.size(); i++) {
-		VkCommandBufferBeginInfo beginInfo{};
-		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-		RAYD_VK_VALIDATE(vkBeginCommandBuffer(m_CommandBuffers[i], &beginInfo), "Failed to start recording command buffer!");
-
-		VkRenderPassBeginInfo renderPassInfo{};
-		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassInfo.renderPass = m_SwapChain->GetRenderPass().GetRenderPassHandle();
-		renderPassInfo.framebuffer = m_SwapChain->GetFramebuffers()[i];
-		renderPassInfo.renderArea.offset = { 0, 0 };
-		renderPassInfo.renderArea.extent = m_SwapChain->GetExtent();
-		VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
-		renderPassInfo.clearValueCount = 1;
-		renderPassInfo.pClearValues = &clearColor;
-
-		vkCmdBeginRenderPass(m_CommandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-		vkCmdBindPipeline(m_CommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
-		vkCmdBindDescriptorSets(m_CommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[i], 0, nullptr);
-		m_VertexBuffer->Bind(m_CommandBuffers[i]);
-		m_IndexBuffer->Bind(m_CommandBuffers[i]);
-
-		vkCmdDrawIndexed(m_CommandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
-
-		vkCmdEndRenderPass(m_CommandBuffers[i]);
-		RAYD_VK_VALIDATE(vkEndCommandBuffer(m_CommandBuffers[i]), "Failed to record command buffer!");
-	}
-}
 
 void GraphicsPipeline::CreateSyncObjects()
 {
