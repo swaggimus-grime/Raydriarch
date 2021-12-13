@@ -35,6 +35,8 @@ public:
 	inline const SwapChainSupportDetails& GetSwapChainSupportDetails() const { return m_SwapChainSupportDetails; }
 
 	inline const QueueFamilies& GetQueueFamilies() const { return m_QueueFamilies; }
+
+	inline void Join() const { vkDeviceWaitIdle(m_Device); }
 private:
 	VkPhysicalDevice FindPhysicalDevice(VkInstance& instance, VkSurfaceKHR& surface, VkPhysicalDeviceFeatures& desiredFeatures);
 	bool ExtensionsSupported(VkPhysicalDevice& physicalDevice);

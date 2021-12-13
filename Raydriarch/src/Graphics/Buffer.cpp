@@ -5,59 +5,65 @@
 
 Buffer::~Buffer()
 {
-	vkDestroyBuffer(m_Device->GetDeviceHandle(), m_Buffer, nullptr);
 	vkFreeMemory(m_Device->GetDeviceHandle(), m_Memory, nullptr);
 }
 
-void Buffer::Map(VkDeviceSize size, void* data)
+void Buffer::Copy(VkDeviceSize size, VkBuffer& srcBuffer, VkBuffer& dstBuffer)
 {
-	void* mappedData;
-	RAYD_VK_VALIDATE(vkMapMemory(m_Device->GetDeviceHandle(), m_Memory, 0, size, 0, &mappedData), "Failed to map to memory!");
-	memcpy(mappedData, data, size);
-	vkUnmapMemory(m_Device->GetDeviceHandle(), m_Memory);
+	VkCommandBuffer commandBuffer = Command::BeginSingleTimeCommands();
+
+	VkBufferCopy copyRegion{};
+	copyRegion.size = size;
+	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+	Command::EndSingleTimeCommands(commandBuffer);
 }
 
-void Buffer::MapData(VkDeviceMemory& memory, const void* data)
+void Buffer::Map(VkDeviceMemory& memory, VkDeviceSize size, const void* data)
 {
 	void* mappedData;
-	vkMapMemory(m_Device->GetDeviceHandle(), memory, 0, m_Size, 0, &mappedData);
-	memcpy(mappedData, data, static_cast<size_t>(m_Size));
+	RAYD_VK_VALIDATE(vkMapMemory(m_Device->GetDeviceHandle(), memory, 0, size, 0, &mappedData), "Failed to map to memory!");
+	memcpy(mappedData, data, size);
 	vkUnmapMemory(m_Device->GetDeviceHandle(), memory);
 }
 
-void Buffer::CreateAndAllocateBuffer(VkBuffer& buffer, VkBufferUsageFlags usage, VkDeviceMemory& memory, VkMemoryPropertyFlags memFlags)
+void Buffer::Allocate(VkDeviceMemory& memory, VkMemoryRequirements& memReqs, VkMemoryPropertyFlags memFlags)
+{
+	VkMemoryAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memReqs.size;
+	VkPhysicalDeviceMemoryProperties memProps;
+	vkGetPhysicalDeviceMemoryProperties(m_Device->GetPhysicalDeviceHandle(), &memProps);
+
+	int32_t memTypeIndex = -1;
+	for (uint32_t i = 0; i < memProps.memoryTypeCount; i++) {
+		if ((memReqs.memoryTypeBits & (1 << i)) && (memProps.memoryTypes[i].propertyFlags & memFlags) == memFlags) {
+			memTypeIndex = i;
+			break;
+		}
+	}
+
+	RAYD_ASSERT(memTypeIndex >= 0, "Failed to find suitable memory type!");
+	allocInfo.memoryTypeIndex = memTypeIndex;
+
+	RAYD_VK_VALIDATE(vkAllocateMemory(m_Device->GetDeviceHandle(), &allocInfo, nullptr, &memory), "Failed to allocate memory!");
+}
+
+void Buffer::Create(VkBuffer& buffer, VkDeviceMemory& memory, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memFlags)
 {
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size = m_Size;
+	bufferInfo.size = size;
 	bufferInfo.usage = usage;
-	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+ 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 	RAYD_VK_VALIDATE(vkCreateBuffer(m_Device->GetDeviceHandle(), &bufferInfo, nullptr, &buffer), "Failed to create buffer!");
 
 	VkMemoryRequirements memReqs;
 	vkGetBufferMemoryRequirements(m_Device->GetDeviceHandle(), buffer, &memReqs);
 
-	VkMemoryAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.allocationSize = memReqs.size;
-	allocInfo.memoryTypeIndex = FindMemoryTypeIndex(memReqs.memoryTypeBits, memFlags);
-
-	RAYD_VK_VALIDATE(vkAllocateMemory(m_Device->GetDeviceHandle(), &allocInfo, nullptr, &memory), "Failed to allocate memory!");
+	Allocate(memory, memReqs, memFlags);
 	vkBindBufferMemory(m_Device->GetDeviceHandle(), buffer, memory, 0);
-}
-
-uint32_t Buffer::FindMemoryTypeIndex(uint32_t typeMask, VkMemoryPropertyFlags propFlags)
-{
-	VkPhysicalDeviceMemoryProperties memProps;
-	vkGetPhysicalDeviceMemoryProperties(m_Device->GetPhysicalDeviceHandle(), &memProps);
-
-	for (uint32_t i = 0; i < memProps.memoryTypeCount; i++) {
-		if ((typeMask & (1 << i)) && (memProps.memoryTypes[i].propertyFlags & propFlags) == propFlags) 
-			return i;
-	}
-
-	RAYD_ERROR("Failed to find suitable memory type!");
 }
 
 VertexBuffer::VertexBuffer(RefPtr<Device> device, uint32_t vertexCount, VkDeviceSize size, const void* data)
@@ -68,14 +74,19 @@ VertexBuffer::VertexBuffer(RefPtr<Device> device, uint32_t vertexCount, VkDevice
 
 	VkBuffer stagingBuffer;
 	VkDeviceMemory stagingMem;
-	CreateAndAllocateBuffer(stagingBuffer, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingMem, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-	MapData(stagingMem, data);
+	Create(stagingBuffer, stagingMem, m_Size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	Map(stagingMem, m_Size, data);
 
-	CreateAndAllocateBuffer(m_Buffer, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, m_Memory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	Command::CopyBuffer(m_Size, stagingBuffer, m_Buffer);
+	Create(m_Buffer, m_Memory, m_Size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	Copy(m_Size, stagingBuffer, m_Buffer);
 
 	vkDestroyBuffer(m_Device->GetDeviceHandle(), stagingBuffer, nullptr);
 	vkFreeMemory(m_Device->GetDeviceHandle(), stagingMem, nullptr);
+}
+
+VertexBuffer::~VertexBuffer()
+{
+	vkDestroyBuffer(m_Device->GetDeviceHandle(), m_Buffer, nullptr);
 }
 
 void VertexBuffer::Bind(VkCommandBuffer& cmdBuffer)
@@ -92,14 +103,19 @@ IndexBuffer::IndexBuffer(RefPtr<Device> device, uint32_t indexCount, VkDeviceSiz
 
 	VkBuffer stagingBuffer;
 	VkDeviceMemory stagingMem;
-	CreateAndAllocateBuffer(stagingBuffer, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingMem, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-	MapData(stagingMem, data);
+	Create(stagingBuffer, stagingMem, m_Size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	Map(stagingMem, m_Size, data);
 
-	CreateAndAllocateBuffer(m_Buffer, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, m_Memory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	Command::CopyBuffer(m_Size, stagingBuffer, m_Buffer);
+	Create(m_Buffer, m_Memory, m_Size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	Copy(m_Size, stagingBuffer, m_Buffer);
 
 	vkDestroyBuffer(m_Device->GetDeviceHandle(), stagingBuffer, nullptr);
 	vkFreeMemory(m_Device->GetDeviceHandle(), stagingMem, nullptr);
+}
+
+IndexBuffer::~IndexBuffer()
+{
+	vkDestroyBuffer(m_Device->GetDeviceHandle(), m_Buffer, nullptr);
 }
 
 void IndexBuffer::Bind(VkCommandBuffer& cmdBuffer)
@@ -112,7 +128,17 @@ UniformBuffer::UniformBuffer(RefPtr<Device> device, VkDeviceSize size)
 	m_Device = device;
 	m_Size = size;
 
-	CreateAndAllocateBuffer(m_Buffer, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, m_Memory, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	Create(m_Buffer, m_Memory, m_Size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+}
+
+UniformBuffer::~UniformBuffer()
+{
+	vkDestroyBuffer(m_Device->GetDeviceHandle(), m_Buffer, nullptr);
+}
+
+void UniformBuffer::Update(VkDeviceSize size, const void* data)
+{
+	Map(m_Memory, size, data);
 }
 
 uint32_t VertexLayout::CalculateOffset(VkFormat format)

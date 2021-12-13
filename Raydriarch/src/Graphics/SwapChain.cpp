@@ -56,21 +56,8 @@ SwapChain::SwapChain(RefPtr<Device> device, VkSurfaceKHR& surface,
 
     m_ImageViews.resize(m_Images.size());
 
-    for (uint32_t i = 0; i < m_Images.size(); i++) {
-        VkImageViewCreateInfo imageViewInfo{};
-        imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        imageViewInfo.image = m_Images[i];
-        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        imageViewInfo.format = m_Format;
-        imageViewInfo.components = { VK_COMPONENT_SWIZZLE_IDENTITY };
-        imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        imageViewInfo.subresourceRange.baseMipLevel = 0;
-        imageViewInfo.subresourceRange.levelCount = 1;
-        imageViewInfo.subresourceRange.baseArrayLayer = 0;
-        imageViewInfo.subresourceRange.layerCount = 1;
-
-        RAYD_VK_VALIDATE(vkCreateImageView(logicalDevice, &imageViewInfo, nullptr, &m_ImageViews[i]), "Failed to create image view!");
-    }
+    for (uint32_t i = 0; i < m_Images.size(); i++) 
+        m_ImageViews[i] = MakeScopedPtr<ImageView>(m_Device, m_Images[i], m_Format);
 
     VkAttachmentDescription colorAttachment{};
     colorAttachment.format = m_Format;
@@ -108,7 +95,7 @@ SwapChain::SwapChain(RefPtr<Device> device, VkSurfaceKHR& surface,
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         framebufferInfo.renderPass = m_RenderPass->GetRenderPassHandle();
         framebufferInfo.attachmentCount = 1;
-        framebufferInfo.pAttachments = &m_ImageViews[i];
+        framebufferInfo.pAttachments = &m_ImageViews[i]->GetHandle();
         framebufferInfo.width = m_Extent.width;
         framebufferInfo.height = m_Extent.height;
         framebufferInfo.layers = 1;
@@ -116,14 +103,10 @@ SwapChain::SwapChain(RefPtr<Device> device, VkSurfaceKHR& surface,
         RAYD_VK_VALIDATE(vkCreateFramebuffer(m_Device->GetDeviceHandle(), &framebufferInfo, nullptr, &m_Framebuffers[i]),
             "Failed to create framebuffer!");
     }
-
 }
 
 SwapChain::~SwapChain()
 {
-    for (auto& imageView : m_ImageViews) 
-        vkDestroyImageView(logicalDevice, imageView, nullptr);
-
     for (auto& framebuffer : m_Framebuffers)
         vkDestroyFramebuffer(logicalDevice, framebuffer, nullptr);
 

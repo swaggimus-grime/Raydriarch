@@ -5,6 +5,7 @@
 #include "Surface.h"
 #include "Device.h"
 #include "RenderPass.h"
+#include "Texture.h"
 
 class SwapChain {
 public:
@@ -20,7 +21,7 @@ public:
 	inline VkFormat GetFormat() { return m_Format; }
 
 	inline const std::vector<VkImage>& GetImages() const { return m_Images; }
-	inline const std::vector<VkImageView>& GetImageViews() const { return m_ImageViews; }
+	inline const std::vector<ScopedPtr<ImageView>>& GetImageViews() const { return m_ImageViews; }
 	inline const std::vector<VkFramebuffer>& GetFramebuffers() const { return m_Framebuffers; }
 private:
 	VkSurfaceFormatKHR FindSurfaceFormat(const VkPhysicalDevice& physicalDevice, const SwapChainSupportDetails& details, VkSurfaceKHR& surface);
@@ -37,6 +38,6 @@ private:
 	ScopedPtr<RenderPass> m_RenderPass;
 
 	std::vector<VkImage> m_Images;
-	std::vector<VkImageView> m_ImageViews;
+	std::vector<ScopedPtr<ImageView>> m_ImageViews;
 	std::vector<VkFramebuffer> m_Framebuffers;
 };

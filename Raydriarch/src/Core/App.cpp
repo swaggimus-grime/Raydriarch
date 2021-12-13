@@ -21,7 +21,7 @@ void App::Run()
 		float deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - startTime).count();
 
 		m_Window->Update();
-		Graphics::Present(deltaTime);
+		Graphics::Present(m_Window, deltaTime);
 	}
 
 }

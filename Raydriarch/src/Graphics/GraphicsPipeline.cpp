@@ -15,13 +15,20 @@ struct UniformBufferObject {
 //Defines max number of frames that are allowed to be processed by the graphics pipeline 
 #define MAX_FRAMES_IN_FLIGHT 2
 
-GraphicsPipeline::GraphicsPipeline(ScopedPtr<Window>& window, RefPtr<Device> device, RefPtr<SwapChain> swapchain, ScopedPtr<Shader>& shader, VertexLayout& vertexLayout)
+GraphicsPipeline::GraphicsPipeline(ScopedPtr<Window>& window, RefPtr<Device> device, ScopedPtr<SwapChain>& swapchain, RefPtr<Shader>& shader, VertexLayout& vertexLayout)
 	:m_Window(window), m_Device(device), m_SwapChain(swapchain), m_Shader(shader), m_VertexLayout(vertexLayout)
 {
 	CreateDescriptorSetLayout();
 	CreatePipeline();
 	CreateUniformBuffers();
-	m_DescriptorPool = MakeScopedPtr<DescriptorPool>(m_Device, m_SwapChain->GetImages().size());
+	m_Sampler = MakeRefPtr<Sampler2D>(m_Device);
+	m_Texture = MakeRefPtr<Texture2D>(m_Device, "res/textures/bruh.jpg");
+	std::array<VkDescriptorPoolSize, 2> poolSizes{};
+	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[0].descriptorCount = static_cast<uint32_t>(swapchain->GetImages().size());
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	poolSizes[1].descriptorCount = static_cast<uint32_t>(swapchain->GetImages().size());
+	m_DescriptorPool = MakeScopedPtr<DescriptorPool>(m_Device, m_SwapChain->GetImages().size(), poolSizes.size(), poolSizes.data());
 	CreateDescriptorSets();
 	CreateSyncObjects();
 }
@@ -38,18 +45,21 @@ GraphicsPipeline::~GraphicsPipeline()
 	}
 }
 
-void GraphicsPipeline::Present(float deltaTime)
+VkResult GraphicsPipeline::Present(float deltaTime)
 {
 	static uint32_t currentFrame = 0;
 
 	vkWaitForFences(m_Device->GetDeviceHandle(), 1, &m_InFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
 	uint32_t imageIndex;
-	vkAcquireNextImageKHR(m_Device->GetDeviceHandle(), m_SwapChain->GetSwapChainHandle(), UINT64_MAX, m_ImageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+	VkResult result = vkAcquireNextImageKHR(m_Device->GetDeviceHandle(), m_SwapChain->GetSwapChainHandle(), UINT64_MAX, m_ImageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+	if (result == VK_ERROR_OUT_OF_DATE_KHR)
+		return VK_ERROR_OUT_OF_DATE_KHR;
+	else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) 
+		RAYD_ERROR("Failed to acquire swap chain image!");
 
 	if (m_ImagesInFlight[imageIndex] != VK_NULL_HANDLE)
 		vkWaitForFences(m_Device->GetDeviceHandle(), 1, &m_ImagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
-
 	m_ImagesInFlight[imageIndex] = m_InFlightFences[currentFrame];
 
 	UniformBufferObject ubo{};
@@ -58,7 +68,7 @@ void GraphicsPipeline::Present(float deltaTime)
 	ubo.proj = glm::perspective(glm::radians(45.0f), m_SwapChain->GetExtent().width / (float)m_SwapChain->GetExtent().height, 0.1f, 10.0f);
 	ubo.proj[1][1] *= -1;
 
-	m_UniformBuffers[imageIndex]->Map(sizeof(ubo), &ubo);
+	m_UniformBuffers[imageIndex]->Update(sizeof(ubo), &ubo);
 
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -93,30 +103,14 @@ void GraphicsPipeline::Present(float deltaTime)
 
 	presentInfo.pImageIndices = &imageIndex;
 
-	if (VkResult result = vkQueuePresentKHR(m_Device->GetQueueFamilies().Present.Queue, &presentInfo);
-		result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-		auto [width, height] = m_Window->GetFramebufferSize();
-		while (width == 0 || height == 0) {
-			width = m_Window->GetFramebufferWidth();
-			height = m_Window->GetFramebufferHeight();
-			glfwWaitEvents();
-		}
-
-		vkDeviceWaitIdle(m_Device->GetDeviceHandle());
-
-		m_SwapChain.reset();
-		vkDestroyPipeline(m_Device->GetDeviceHandle(), m_Pipeline, nullptr);
-		vkDestroyPipelineLayout(m_Device->GetDeviceHandle(), m_PipelineLayout, nullptr);
-
-		m_SwapChain = MakeScopedPtr<SwapChain>(m_Device, m_Window->GetSurface().GetSurfaceHandle(), width, height);
-		CreatePipeline();
-
-		m_ImagesInFlight.resize(m_SwapChain->GetImages().size(), VK_NULL_HANDLE);
-	}
+	if (result = vkQueuePresentKHR(m_Device->GetQueueFamilies().Present.Queue, &presentInfo);
+		result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) 
+		result = VK_ERROR_OUT_OF_DATE_KHR;
 	else if (result != VK_SUCCESS)
 		RAYD_ERROR("Failed to rebuild swap chain!");
 	
 	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+	return result;
 }
 
 void GraphicsPipeline::Shutdown()
@@ -128,41 +122,64 @@ void GraphicsPipeline::CreateDescriptorSetLayout()
 {
 	VkDescriptorSetLayoutBinding uboLayoutBinding{};
 	uboLayoutBinding.binding = 0;
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	uboLayoutBinding.descriptorCount = 1;
+	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uboLayoutBinding.pImmutableSamplers = nullptr;
 	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-	m_DescriptorSetLayout = MakeScopedPtr<DescriptorSetLayout>(m_Device, 1, &uboLayoutBinding);
+	VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+	samplerLayoutBinding.binding = 1;
+	samplerLayoutBinding.descriptorCount = 1;
+	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	samplerLayoutBinding.pImmutableSamplers = nullptr;
+	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
+	m_DescriptorSetLayout = MakeScopedPtr<DescriptorSetLayout>(m_Device, bindings.size(), bindings.data());
 }
 
 void GraphicsPipeline::CreateDescriptorSets()
 {
-	std::vector<VkDescriptorSetLayout> layouts(m_SwapChain->GetNumFramebuffers(), m_DescriptorSetLayout->GetLayoutHandle());
+	std::vector<VkDescriptorSetLayout> layouts(m_SwapChain->GetImages().size(), m_DescriptorSetLayout->GetLayoutHandle());
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = m_DescriptorPool->GetPoolHandle();
-	allocInfo.descriptorSetCount = static_cast<uint32_t>(m_SwapChain->GetNumFramebuffers());
+	allocInfo.descriptorSetCount = static_cast<uint32_t>(m_SwapChain->GetImages().size());
 	allocInfo.pSetLayouts = layouts.data();
 
-	m_DescriptorSets.resize(m_SwapChain->GetNumFramebuffers());
+	m_DescriptorSets.resize(m_SwapChain->GetImages().size());
 	RAYD_VK_VALIDATE(vkAllocateDescriptorSets(m_Device->GetDeviceHandle(), &allocInfo, m_DescriptorSets.data()), "Failed to allocate descriptor sets!");
 
-	for (size_t i = 0; i < m_SwapChain->GetNumFramebuffers(); i++) {
+	for (size_t i = 0; i < m_SwapChain->GetImages().size(); i++) {
 		VkDescriptorBufferInfo bufferInfo{};
 		bufferInfo.buffer = m_UniformBuffers[i]->GetBufferHandle();
 		bufferInfo.offset = 0;
 		bufferInfo.range = sizeof(UniformBufferObject);
 
-		VkWriteDescriptorSet descriptorWrite{};
-		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrite.dstSet = m_DescriptorSets[i];
-		descriptorWrite.dstBinding = 0;
-		descriptorWrite.dstArrayElement = 0;
-		descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		descriptorWrite.descriptorCount = 1;
-		descriptorWrite.pBufferInfo = &bufferInfo;
+		VkDescriptorImageInfo imageInfo{};
+		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		imageInfo.imageView = m_Texture->GetViewHandle();
+		imageInfo.sampler = m_Sampler->GetHandle();
 
-		vkUpdateDescriptorSets(m_Device->GetDeviceHandle(), 1, &descriptorWrite, 0, nullptr);
+		std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+
+		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[0].dstSet = m_DescriptorSets[i];
+		descriptorWrites[0].dstBinding = 0;
+		descriptorWrites[0].dstArrayElement = 0;
+		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrites[0].descriptorCount = 1;
+		descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[1].dstSet = m_DescriptorSets[i];
+		descriptorWrites[1].dstBinding = 1;
+		descriptorWrites[1].dstArrayElement = 0;
+		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrites[1].descriptorCount = 1;
+		descriptorWrites[1].pImageInfo = &imageInfo;
+
+		vkUpdateDescriptorSets(m_Device->GetDeviceHandle(), static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 	}
 }
 

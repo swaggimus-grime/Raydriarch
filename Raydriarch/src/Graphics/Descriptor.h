@@ -18,13 +18,12 @@ private:
 
 class DescriptorPool {
 public:
-	DescriptorPool(RefPtr<Device> device, uint32_t descriptorCount);
+	DescriptorPool(RefPtr<Device> device, uint32_t numSwapcbainImages, uint32_t numSizes, const VkDescriptorPoolSize* sizes);
 	~DescriptorPool();
 
 	inline const VkDescriptorPool& GetPoolHandle() const { return m_Pool; }
 private:
 	RefPtr<Device> m_Device;
-
 	VkDescriptorPool m_Pool;
 };
 

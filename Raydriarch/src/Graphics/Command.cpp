@@ -5,10 +5,11 @@ static struct CommandObjects {
 	RefPtr<Device> GPU;
 	VkCommandPool CommandPool;
 	std::vector<VkCommandBuffer> CommandBuffers;
-}* s_Objects = new CommandObjects;
+}*s_Objects;
 
 void Command::Init(RefPtr<Device> device, uint8_t numBuffers)
 {
+	s_Objects = new CommandObjects;
 	s_Objects->GPU = device;
 
 	VkCommandPoolCreateInfo commandPoolInfo{};
@@ -30,8 +31,7 @@ void Command::Init(RefPtr<Device> device, uint8_t numBuffers)
 		"Failed to allocate command buffers!");
 }
 
-void Command::CopyBuffer(VkDeviceSize size, VkBuffer& srcBuffer, VkBuffer& dstBuffer)
-{
+VkCommandBuffer Command::BeginSingleTimeCommands() {
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -47,10 +47,10 @@ void Command::CopyBuffer(VkDeviceSize size, VkBuffer& srcBuffer, VkBuffer& dstBu
 
 	vkBeginCommandBuffer(commandBuffer, &beginInfo);
 
-	VkBufferCopy copyRegion{};
-	copyRegion.size = size;
-	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+	return commandBuffer;
+}
 
+void Command::EndSingleTimeCommands(VkCommandBuffer commandBuffer) {
 	vkEndCommandBuffer(commandBuffer);
 
 	VkSubmitInfo submitInfo{};
@@ -106,4 +106,6 @@ VkCommandBuffer* Command::GetCommandBuffers()
 {
 	return s_Objects->CommandBuffers.data();
 }
+
+
 

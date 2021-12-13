@@ -21,6 +21,7 @@ IncludeDir["GLFW"] = "Raydriarch/vendor/GLFW/include"
 IncludeDir["glm"] = "Raydriarch/vendor/glm"
 IncludeDir["Vulkan"] = "Raydriarch/vendor/Vulkan/include"
 IncludeDir["spdlog"] = "Raydriarch/vendor/spdlog/include"
+IncludeDir["stb"] = "Raydriarch/vendor/stb"
 IncludeDir["libshaderc"] = "Raydriarch/vendor/Shaderc/libshaderc/include"
 
 group "Dependencies"
@@ -45,7 +46,9 @@ project "Raydriarch"
 		"%{prj.name}/src/**.h",
 		"%{prj.name}/src/**.cpp",
 		"%{prj.name}/vendor/glm/glm/**.hpp",
-		"%{prj.name}/vendor/glm/glm/**.inl"
+		"%{prj.name}/vendor/glm/glm/**.inl",
+		"%{prj.name}/vendor/stb/**.h",
+		"%{prj.name}/vendor/stb/**.cpp"
 	}
 
 	defines
@@ -64,7 +67,8 @@ project "Raydriarch"
 		"%{IncludeDir.Vulkan}",
 		"%{IncludeDir.spdlog}",
 		"%{IncludeDir.libshaderc}",
-		"%{IncludeDir.glm}"
+		"%{IncludeDir.glm}",
+		"%{IncludeDir.stb}"
 	}
 
 	links 

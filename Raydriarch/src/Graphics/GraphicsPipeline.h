@@ -8,10 +8,10 @@
 
 class GraphicsPipeline {
 public:
-	GraphicsPipeline(ScopedPtr<class Window>& window, RefPtr<Device> device, RefPtr<SwapChain> swapchain, ScopedPtr<Shader>& shader, VertexLayout& vertexLayout);
+	GraphicsPipeline(ScopedPtr<class Window>& window, RefPtr<Device> device, ScopedPtr<SwapChain>& swapchain, RefPtr<Shader>& shader, VertexLayout& vertexLayout);
 	~GraphicsPipeline();
 
-	void Present(float deltaTime);
+	VkResult Present(float deltaTime);
 	void Shutdown();
 	inline const VkPipeline& GetPipelineHandle() const { return m_Pipeline; }
 	inline const VkPipelineLayout& GetPipelineLayout() const { return m_PipelineLayout; }
@@ -25,7 +25,7 @@ private:
 private:
 	ScopedPtr<Window>& m_Window;
 	RefPtr<Device> m_Device;
-	RefPtr<SwapChain> m_SwapChain;
+	ScopedPtr<SwapChain>& m_SwapChain;
 	VertexLayout& m_VertexLayout;
 
 	VkPipeline m_Pipeline;
@@ -38,9 +38,12 @@ private:
 
 	VertexBuffer* m_VertexBuffer;
 	IndexBuffer* m_IndexBuffer;
+	RefPtr<Texture2D> m_Texture;
+	RefPtr<Sampler2D> m_Sampler;
+
 	std::vector<ScopedPtr<UniformBuffer>> m_UniformBuffers;
 
-	ScopedPtr<Shader>& m_Shader;
+	RefPtr<Shader>& m_Shader;
 
 	std::vector<VkSemaphore> m_ImageAvailableSemaphores;
 	std::vector<VkSemaphore> m_RenderFinishedSemaphores;

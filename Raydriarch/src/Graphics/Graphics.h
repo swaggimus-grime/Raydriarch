@@ -18,13 +18,16 @@ struct SceneData {
 };
 
 struct GraphicsObjects {
-	RefPtr<SwapChain> SC;
+	RefPtr<Device> GPU;
+	ScopedPtr<SwapChain> SC;
 };
 
 class Graphics {
 public:
 	static void Init(ScopedPtr<class Window>& window);
-	static void Present(float deltaTime);
+	static void Present(ScopedPtr<class Window>& window, float deltaTime);
 	static void Shutdown();
 
+private:
+	static void RecreateSwapChain(ScopedPtr<class Window>& window);
 };
