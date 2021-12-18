@@ -32,7 +32,7 @@ public:
 	inline GLFWwindow* GetHandle() const { return m_Window; }
 	inline GraphicsContext& GetGraphicsContext() const { return *m_Context; }
 
-	Surface& GetSurface();
+	ScopedPtr<Surface>& GetSurface();
 
 private:
 	static std::vector<const char*>& GetRequiredVulkanExtensions();
@@ -41,6 +41,8 @@ private:
 	WindowProps m_Props;
 
 	ScopedPtr<GraphicsContext> m_Context;
-
 	ScopedPtr<Surface> m_Surface;
+
+	friend class Graphics;
+	bool m_Resized = false;
 };

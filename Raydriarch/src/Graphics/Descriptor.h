@@ -6,7 +6,7 @@
 
 class DescriptorSetLayout {
 public:
-	DescriptorSetLayout(RefPtr<Device> device, uint32_t numBindings, const VkDescriptorSetLayoutBinding* bindings);
+	DescriptorSetLayout(RefPtr<Device> device, std::vector<VkDescriptorSetLayoutBinding>& bindings);
 	~DescriptorSetLayout();
 
 	inline const VkDescriptorSetLayout& GetLayoutHandle() const { return m_Layout; }
@@ -18,7 +18,7 @@ private:
 
 class DescriptorPool {
 public:
-	DescriptorPool(RefPtr<Device> device, uint32_t numSwapcbainImages, uint32_t numSizes, const VkDescriptorPoolSize* sizes);
+	DescriptorPool(RefPtr<Device> device, uint32_t numSwapcbainImages, std::vector<VkDescriptorPoolSize>& sizes);
 	~DescriptorPool();
 
 	inline const VkDescriptorPool& GetPoolHandle() const { return m_Pool; }

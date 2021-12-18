@@ -58,9 +58,8 @@ public:
 	void AddAttribute(uint32_t location, uint32_t binding, VkFormat format);
 	void AddBinding(uint32_t binding, uint32_t stride, VkVertexInputRate inputRate);
 
-	inline const uint32_t GetNumAttributes() const { return m_AttribDescriptions.size(); }
-	inline const VkVertexInputAttributeDescription* GetAttributes() const { return m_AttribDescriptions.data(); }
-	inline const VkVertexInputBindingDescription* GetBindings() const { return m_Bindings.data(); }
+	inline const std::vector<VkVertexInputAttributeDescription>& GetAttributes() { return m_AttribDescriptions; }
+	inline const std::vector<VkVertexInputBindingDescription>& GetBindings() { return m_Bindings; }
 private:
 	uint32_t CalculateOffset(VkFormat format);
 private:

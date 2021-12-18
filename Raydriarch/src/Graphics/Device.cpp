@@ -1,9 +1,11 @@
 #include "raydpch.h"
 #include "Device.h"
 
-Device::Device(VkInstance& instance, VkSurfaceKHR& surface, VkPhysicalDeviceFeatures& desiredFeatures)
+#include "Surface.h"
+
+Device::Device(VkInstance& instance, ScopedPtr<Surface>& surface, VkPhysicalDeviceFeatures& desiredFeatures)
 {
-	m_PhysicalDevice = FindPhysicalDevice(instance, surface, desiredFeatures);
+	m_PhysicalDevice = FindPhysicalDevice(instance, surface->GetSurfaceHandle(), desiredFeatures);
 	m_Device = FindDevice(instance, desiredFeatures);
 
 	vkGetDeviceQueue(m_Device, *m_QueueFamilies.Graphics.Index, 0, &m_QueueFamilies.Graphics.Queue);

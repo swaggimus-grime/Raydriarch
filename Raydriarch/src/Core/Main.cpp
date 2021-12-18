@@ -1,7 +1,12 @@
 #include "raydpch.h"
+
 #include "App.h"
 
-int main() {
-	ScopedPtr<App> app = MakeScopedPtr<App>();
-	if(app) app->Run();
+int main()
+{
+	{
+		App app("bruh");
+		app.Run();
+	}
+	return 0;
 }

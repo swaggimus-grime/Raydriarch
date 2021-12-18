@@ -21,21 +21,23 @@ Window::Window(const WindowProps& props)
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
 	m_Window = glfwCreateWindow(props.Width, props.Height, m_Props.Title.c_str(), nullptr, nullptr);
-	glfwSetWindowUserPointer(m_Window, &m_Props);
+	glfwSetWindowUserPointer(m_Window, this);
 
 	auto& glfwExtensions = GetRequiredVulkanExtensions();
 	m_Context = MakeScopedPtr<GraphicsContext>(glfwExtensions.size(), glfwExtensions.data());
 
 	glfwSetWindowSizeCallback(m_Window, [](GLFWwindow* window, int width, int height)
 		{
-			WindowProps& props = *(WindowProps*)glfwGetWindowUserPointer(window);
-			props.Width = width;
-			props.Height = height;
-		});
+			auto* app = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
+			app->m_Props.Width = width;
+			app->m_Props.Height = height;
+		}
+	);
 
 	glfwSetFramebufferSizeCallback(m_Window, [](GLFWwindow* window, int width, int height) 
 		{
-
+			auto* app = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
+			app->m_Resized = true;
 		});
 }
 
@@ -73,7 +75,7 @@ std::vector<const char*>& Window::GetRequiredVulkanExtensions()
 	return extensions;
 }
 
-Surface& Window::GetSurface()
+ScopedPtr<Surface>& Window::GetSurface()
 {
 	if (!m_Surface) {
 		auto& instance = m_Context->GetInstance();
@@ -84,6 +86,6 @@ Surface& Window::GetSurface()
 		m_Surface = MakeScopedPtr<Surface>(instance, surface);
 	}
 	
-	return *m_Surface;
+	return m_Surface;
 }
 

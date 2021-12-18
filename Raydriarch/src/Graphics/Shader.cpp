@@ -2,21 +2,19 @@
 #include "Shader.h"
 
 #include <shaderc/shaderc.hpp>
+#include "Device.h"
 
-static VkDevice logicalDevice;
-
-Shader::Shader(const VkDevice& device, const std::string& vertPath, const std::string& fragPath)
+Shader::Shader(RefPtr<Device> device, const std::string& vertPath, const std::string& fragPath)
+	:m_Device(device)
 {
-	logicalDevice = device;
-
-	m_VertModule = CreateModule(logicalDevice, vertPath);
-	m_FragModule = CreateModule(logicalDevice, fragPath);
+	m_VertModule = CreateModule(vertPath);
+	m_FragModule = CreateModule(fragPath);
 }
 
 Shader::~Shader()
 {
-	vkDestroyShaderModule(logicalDevice, m_VertModule, nullptr);
-	vkDestroyShaderModule(logicalDevice, m_FragModule, nullptr);
+	vkDestroyShaderModule(m_Device->GetDeviceHandle(), m_VertModule, nullptr);
+	vkDestroyShaderModule(m_Device->GetDeviceHandle(), m_FragModule, nullptr);
 }
 
 std::optional<std::string> Shader::ReadFile(const std::string& filePath)
@@ -29,7 +27,7 @@ std::optional<std::string> Shader::ReadFile(const std::string& filePath)
 	return {};
 }
 
-VkShaderModule Shader::CreateModule(VkDevice& device, const std::string& filePath)
+VkShaderModule Shader::CreateModule(const std::string& filePath)
 {
 	auto source = ReadFile(filePath);
 	RAYD_ASSERT(source, "Failed to find shader file {0}", filePath.c_str());
@@ -40,7 +38,7 @@ VkShaderModule Shader::CreateModule(VkDevice& device, const std::string& filePat
 	createInfo.pCode = reinterpret_cast<const uint32_t*>(source->c_str());
 
 	VkShaderModule shaderModule;
-	RAYD_VK_VALIDATE(vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule), "Failed to create shader module!");
+	RAYD_VK_VALIDATE(vkCreateShaderModule(m_Device->GetDeviceHandle(), &createInfo, nullptr, &shaderModule), "Failed to create shader module!");
 
 	return shaderModule;
 }

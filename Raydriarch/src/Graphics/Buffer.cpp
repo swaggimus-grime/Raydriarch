@@ -160,10 +160,19 @@ uint32_t VertexLayout::CalculateOffset(VkFormat format)
 
 void VertexLayout::AddAttribute(uint32_t location, uint32_t binding, VkFormat format)
 {
-	m_AttribDescriptions.push_back({ location, binding, format, CalculateOffset(format)});
+	VkVertexInputAttributeDescription desc;
+	desc.binding = binding;
+	desc.location = location;
+	desc.format = format;
+	desc.offset = CalculateOffset(format);
+	m_AttribDescriptions.push_back(desc);
 }
 
 void VertexLayout::AddBinding(uint32_t binding, uint32_t stride, VkVertexInputRate inputRate)
 {
-	m_Bindings.push_back({ binding, stride, inputRate });
+	VkVertexInputBindingDescription desc;
+	desc.binding = binding;
+	desc.stride = stride;
+	desc.inputRate = inputRate;
+	m_Bindings.push_back(desc);
 }

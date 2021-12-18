@@ -23,6 +23,7 @@ IncludeDir["Vulkan"] = "Raydriarch/vendor/Vulkan/include"
 IncludeDir["spdlog"] = "Raydriarch/vendor/spdlog/include"
 IncludeDir["stb"] = "Raydriarch/vendor/stb"
 IncludeDir["libshaderc"] = "Raydriarch/vendor/Shaderc/libshaderc/include"
+IncludeDir["tinyobjloader"] = "Raydriarch/vendor/tinyobjloader"
 
 group "Dependencies"
 	include "Raydriarch/vendor/GLFW"
@@ -68,7 +69,8 @@ project "Raydriarch"
 		"%{IncludeDir.spdlog}",
 		"%{IncludeDir.libshaderc}",
 		"%{IncludeDir.glm}",
-		"%{IncludeDir.stb}"
+		"%{IncludeDir.stb}",
+		"%{IncludeDir.tinyobjloader}"
 	}
 
 	links 

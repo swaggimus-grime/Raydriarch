@@ -25,7 +25,7 @@ struct SwapChainSupportDetails {
 
 class Device {
 public:
-	Device(VkInstance& instance, VkSurfaceKHR& surface, VkPhysicalDeviceFeatures& desiredFeatures);
+	Device(VkInstance& instance, ScopedPtr<class Surface>& surface, VkPhysicalDeviceFeatures& desiredFeatures);
 	~Device();
 
 	inline const VkPhysicalDevice& GetPhysicalDeviceHandle() const { return m_PhysicalDevice; }
