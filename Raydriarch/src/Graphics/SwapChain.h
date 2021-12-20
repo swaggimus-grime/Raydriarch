@@ -12,12 +12,12 @@ public:
 		uint32_t framebufferWidth, uint32_t framebufferHeight);
 	~SwapChain();
 
-	inline size_t GetNumFramebuffers() const { return m_Framebuffers.size(); }
 	inline const VkSwapchainKHR& GetSwapChainHandle() const { return m_SwapChain; }
 	inline const VkRenderPass& GetRenderPass() const { return m_RenderPass; }
 
-	inline VkExtent2D GetExtent() { return m_Extent; }
-	inline VkFormat GetFormat() { return m_Format; }
+	inline VkExtent2D GetExtent() const { return m_Extent; }
+	inline VkFormat GetFormat() const { return m_Format; }
+	inline VkSampleCountFlagBits GetSampleCount() const { return m_SampleCount; }
 
 	inline const std::vector<VkImage>& GetImages() const { return m_Images; }
 	inline const std::vector<VkImageView>& GetImageViews() const { return m_ImageViews; }
@@ -34,11 +34,13 @@ private:
 	VkSwapchainKHR m_SwapChain;
 	VkFormat m_Format;
 	VkExtent2D m_Extent;
+	VkSampleCountFlagBits m_SampleCount;
 
 	VkRenderPass m_RenderPass;
 
 	std::vector<VkImage> m_Images;
 	std::vector<VkImageView> m_ImageViews;
 	std::vector<VkFramebuffer> m_Framebuffers;
+	ScopedPtr<Image> m_ColorBuffer;
 	ScopedPtr<Image> m_DepthBuffer;
 };

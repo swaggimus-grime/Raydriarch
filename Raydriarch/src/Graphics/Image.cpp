@@ -23,7 +23,7 @@ Image::Image(RefPtr<Device> device, const std::string& filepath)
 	Map(stagingBufferMemory, size, data);
 	stbi_image_free(data);
 
-    Create(VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+    Create(VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_SAMPLE_COUNT_1_BIT);
     Transition(VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     CopyFromBuffer(stagingBuffer);
 
@@ -34,14 +34,15 @@ Image::Image(RefPtr<Device> device, const std::string& filepath)
     GenerateMipmaps(VK_FORMAT_R8G8B8A8_SRGB);
 }
 
-Image::Image(RefPtr<Device> device, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkImageAspectFlags aspect, std::optional<uint32_t> mipLevels)
+Image::Image(RefPtr<Device> device, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, 
+    VkImageUsageFlags usage, VkImageAspectFlags aspect, VkSampleCountFlagBits sampleCount, uint32_t mipLevels)
 {
     m_Device = device;
     m_Width = width;
     m_Height = height;
-    m_MipLevels = mipLevels ? *mipLevels : static_cast<uint32_t>(std::floor(std::log2(std::max(m_Width, m_Height)))) + 1;
+    m_MipLevels = mipLevels == 1 ? mipLevels : static_cast<uint32_t>(std::floor(std::log2(std::max(m_Width, m_Height)))) + 1;
     
-    Create(format, tiling, usage);
+    Create(format, tiling, usage, sampleCount);
 
     m_View = CreateImageView(m_Device, m_Image, format, aspect, m_MipLevels);
     if(m_MipLevels > 1) GenerateMipmaps(format);
@@ -71,7 +72,7 @@ VkImageView Image::CreateImageView(RefPtr<Device> device, VkImage& img, VkFormat
     return view;
 }
 
-void Image::Create(VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage)
+void Image::Create(VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkSampleCountFlagBits sampleCount)
 {
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -86,7 +87,7 @@ void Image::Create(VkFormat format, VkImageTiling tiling, VkImageUsageFlags usag
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.usage = usage;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.samples = sampleCount;
 
     RAYD_VK_VALIDATE(vkCreateImage(m_Device->GetDeviceHandle(), &imageInfo, nullptr, &m_Image), "Failed to create image!");
 

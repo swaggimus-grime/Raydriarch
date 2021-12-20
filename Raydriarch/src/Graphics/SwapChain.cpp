@@ -60,8 +60,28 @@ SwapChain::SwapChain(RefPtr<Device> device, ScopedPtr<Surface>& surface,
     for (size_t i = 0; i < m_Images.size(); i++) 
         m_ImageViews[i] = Image::CreateImageView(m_Device, m_Images[i], m_Format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 
+    VkPhysicalDeviceProperties physicalDeviceProperties;
+    vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
+
+    VkSampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts & physicalDeviceProperties.limits.framebufferDepthSampleCounts;
+    m_SampleCount = VK_SAMPLE_COUNT_1_BIT;
+    if(counts & VK_SAMPLE_COUNT_64_BIT) 
+        m_SampleCount = VK_SAMPLE_COUNT_64_BIT;
+    else if(counts & VK_SAMPLE_COUNT_32_BIT)
+        m_SampleCount = VK_SAMPLE_COUNT_32_BIT;
+    else if (counts & VK_SAMPLE_COUNT_16_BIT)
+        m_SampleCount = VK_SAMPLE_COUNT_16_BIT;
+    else if (counts & VK_SAMPLE_COUNT_8_BIT)
+        m_SampleCount = VK_SAMPLE_COUNT_8_BIT;
+    else if (counts & VK_SAMPLE_COUNT_4_BIT)
+        m_SampleCount = VK_SAMPLE_COUNT_4_BIT;
+    else if (counts & VK_SAMPLE_COUNT_2_BIT)
+        m_SampleCount = VK_SAMPLE_COUNT_2_BIT;
+
+    m_ColorBuffer = MakeScopedPtr<Image>(m_Device, m_Extent.width, m_Extent.height, m_Format, 
+        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_ASPECT_COLOR_BIT, m_SampleCount);
     m_DepthBuffer = MakeScopedPtr<Image>(m_Device, m_Extent.width, m_Extent.height, Image::GetDepthFormat(m_Device),
-        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT, m_SampleCount);
     CreateRenderPass();
     CreateFramebuffers();
 }
@@ -122,21 +142,35 @@ void SwapChain::CreateRenderPass()
 {
     VkAttachmentDescription colorAttachment{};
     colorAttachment.format = m_Format;
-    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.samples = m_SampleCount;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference colorAttachmentRef{};
     colorAttachmentRef.attachment = 0;
     colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
+    VkAttachmentDescription colorAttachmentResolve{};
+    colorAttachmentResolve.format = m_Format;
+    colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkAttachmentReference colorAttachmentResolveRef{};
+    colorAttachmentResolveRef.attachment = 2;
+    colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
     VkAttachmentDescription depthAttachment{};
     depthAttachment.format = Image::GetDepthFormat(m_Device);
-    depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    depthAttachment.samples = m_SampleCount;
     depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -153,6 +187,7 @@ void SwapChain::CreateRenderPass()
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &colorAttachmentRef;
     subpass.pDepthStencilAttachment = &depthAttachmentRef;
+    subpass.pResolveAttachments = &colorAttachmentResolveRef;
 
     VkSubpassDependency dependency{};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -161,7 +196,7 @@ void SwapChain::CreateRenderPass()
     dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-    std::array<VkAttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
+    std::array<VkAttachmentDescription, 3> attachments = { colorAttachment, depthAttachment, colorAttachmentResolve };
     VkRenderPassCreateInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
@@ -179,9 +214,10 @@ void SwapChain::CreateFramebuffers()
     m_Framebuffers.resize(m_ImageViews.size());
 
     for (size_t i = 0; i < m_ImageViews.size(); i++) {
-        std::array<VkImageView, 2> attachments = {
-            m_ImageViews[i],
-            m_DepthBuffer->GetViewHandle()
+        std::array<VkImageView, 3> attachments = {
+            m_ColorBuffer->GetViewHandle(),
+            m_DepthBuffer->GetViewHandle(),
+            m_ImageViews[i]
         };
 
         VkFramebufferCreateInfo framebufferInfo{};

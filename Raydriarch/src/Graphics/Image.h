@@ -16,7 +16,8 @@ private:
 class Image : public Buffer {
 public:
 	Image(RefPtr<Device> device, const std::string& filepath);
-	Image(RefPtr<Device> device, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkImageAspectFlags aspect, std::optional<uint32_t> mipLevels);
+	Image(RefPtr<Device> device, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, 
+		VkImageUsageFlags usage, VkImageAspectFlags aspect, VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT, uint32_t mipLevels = 1);
 	~Image();
 	static VkImageView CreateImageView(RefPtr<Device> device, VkImage& img, VkFormat fmt, VkImageAspectFlags aspect, uint32_t mipLevels);
 	static VkFormat GetSupportedFormat(RefPtr<Device> device, const std::vector<VkFormat>& formats, VkImageTiling tiling, VkFormatFeatureFlags features);
@@ -28,7 +29,7 @@ public:
 	inline const VkImageView& GetViewHandle() { return m_View; }
 	inline uint32_t MipLevelSize() const { return m_MipLevels; }
 protected:
-	void Create(VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage);
+	void Create(VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkSampleCountFlagBits sampleCount);
 	void GenerateMipmaps(VkFormat format);
 	void CopyFromBuffer(VkBuffer buffer);
 	void Transition(VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
