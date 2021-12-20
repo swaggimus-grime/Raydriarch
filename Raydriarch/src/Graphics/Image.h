@@ -5,7 +5,7 @@
 
 class Sampler {
 public:
-	Sampler(RefPtr<Device> device);
+	Sampler(RefPtr<Device> device, uint32_t mipLevels);
 	~Sampler();
 	inline const VkSampler& GetHandle() { return m_Sampler; }
 private:
@@ -16,9 +16,9 @@ private:
 class Image : public Buffer {
 public:
 	Image(RefPtr<Device> device, const std::string& filepath);
-	Image(RefPtr<Device> device, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkImageAspectFlags aspect);
+	Image(RefPtr<Device> device, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkImageAspectFlags aspect, std::optional<uint32_t> mipLevels);
 	~Image();
-	static VkImageView CreateImageView(RefPtr<Device> device, VkImage& img, VkFormat fmt, VkImageAspectFlags aspect);
+	static VkImageView CreateImageView(RefPtr<Device> device, VkImage& img, VkFormat fmt, VkImageAspectFlags aspect, uint32_t mipLevels);
 	static VkFormat GetSupportedFormat(RefPtr<Device> device, const std::vector<VkFormat>& formats, VkImageTiling tiling, VkFormatFeatureFlags features);
 	static VkFormat GetDepthFormat(RefPtr<Device> device) {
 		return GetSupportedFormat(device, { VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT },
@@ -26,9 +26,10 @@ public:
 	}
 	inline const VkImage& GetImageHandle() { return m_Image; }
 	inline const VkImageView& GetViewHandle() { return m_View; }
+	inline uint32_t MipLevelSize() const { return m_MipLevels; }
 protected:
 	void Create(VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage);
-	
+	void GenerateMipmaps(VkFormat format);
 	void CopyFromBuffer(VkBuffer buffer);
 	void Transition(VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 protected:
@@ -36,4 +37,5 @@ protected:
 	VkImageView m_View;
 	uint32_t m_Width;
 	uint32_t m_Height;
+	uint32_t m_MipLevels;
 };

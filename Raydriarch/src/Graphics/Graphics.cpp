@@ -17,34 +17,19 @@ struct UniformBufferObject {
 	alignas(16) glm::mat4 proj;
 };
 
-struct Vertex {
-	glm::vec3 pos;
-	glm::vec3 color;
-	glm::vec2 texCoord;
-};
-
-const std::vector<Vertex> vertices = {
-	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-	{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-	{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-
-	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-	{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-	{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-};
-
-const std::vector<uint16_t> indices = {
-	0, 1, 2, 2, 3, 0,
-	4, 5, 6, 6, 7, 4
-};
 void Graphics::Init(ScopedPtr<Window>& window)
 {
 	VkPhysicalDeviceFeatures deviceFeatures{};
 	deviceFeatures.geometryShader = 1;
 	deviceFeatures.samplerAnisotropy = VK_TRUE;
 	s_Objects->GPU = MakeRefPtr<Device>(window->GetGraphicsContext().GetInstance(), window->GetSurface(), deviceFeatures);
+
+	VkCommandPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.queueFamilyIndex = *s_Objects->GPU->GetQueueFamilies().Graphics.Index;
+
+	RAYD_VK_VALIDATE(vkCreateCommandPool(s_Objects->GPU->GetDeviceHandle(), &poolInfo, nullptr, &s_Objects->CommandPool), "Failed to create graphics command pool!");
+	Command::Init(s_Objects->GPU, s_Objects->CommandPool);
 
 	auto [width, height] = window->GetFramebufferSize();
 	s_Objects->SC = MakeScopedPtr<SwapChain>(s_Objects->GPU, window->GetSurface(), width, height);
@@ -62,9 +47,11 @@ void Graphics::Init(ScopedPtr<Window>& window)
 	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	samplerLayoutBinding.pImmutableSamplers = nullptr;
 	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
 	std::vector<VkDescriptorSetLayoutBinding> descLayoutBindings;
 	descLayoutBindings.push_back(uboLayoutBinding);
 	descLayoutBindings.push_back(samplerLayoutBinding);
+
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	layoutInfo.bindingCount = descLayoutBindings.size();
@@ -72,23 +59,11 @@ void Graphics::Init(ScopedPtr<Window>& window)
 
 	RAYD_VK_VALIDATE(vkCreateDescriptorSetLayout(s_Objects->GPU->GetDeviceHandle(), &layoutInfo, nullptr, &s_Data->DescSetLayout), "Failed to create descriptor set layout!");
 
-	s_Data->VLayout.AddAttribute(0, 0, VK_FORMAT_R32G32B32_SFLOAT);
-	s_Data->VLayout.AddAttribute(1, 0, VK_FORMAT_R32G32B32_SFLOAT);
-	s_Data->VLayout.AddAttribute(2, 0, VK_FORMAT_R32G32_SFLOAT);
-	s_Data->VLayout.AddBinding(0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX);
-	s_Data->Pipeline = MakeRefPtr<GraphicsPipeline>(s_Objects->GPU, s_Objects->SC, s_Data->DescSetLayout, "res/shaders/vert.spv", "res/shaders/frag.spv", s_Data->VLayout);
+	s_Data->Room = MakeScopedPtr<Model>(s_Objects->GPU, "res/models/viking_room/viking_room.obj");
+	s_Data->Pipeline = MakeRefPtr<GraphicsPipeline>(s_Objects->GPU, s_Objects->SC, s_Data->DescSetLayout, "res/shaders/vert.spv", "res/shaders/frag.spv", s_Data->Room->GetVertexLayout());
 
-	VkCommandPoolCreateInfo poolInfo{};
-	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	poolInfo.queueFamilyIndex = *s_Objects->GPU->GetQueueFamilies().Graphics.Index;
-
-	RAYD_VK_VALIDATE(vkCreateCommandPool(s_Objects->GPU->GetDeviceHandle(), &poolInfo, nullptr, &s_Objects->CommandPool), "Failed to create graphics command pool!");
-	Command::Init(s_Objects->GPU, s_Objects->CommandPool);
-
-	s_Data->Texture = MakeRefPtr<Image>(s_Objects->GPU, "res/textures/bruh.jpg");
-	s_Data->Sampler = MakeRefPtr<Sampler>(s_Objects->GPU);
-	s_Data->VBuffer = MakeRefPtr<VertexBuffer>(s_Objects->GPU, vertices.size(), vertices.size() * sizeof(Vertex), vertices.data());
-	s_Data->IBuffer = MakeRefPtr<IndexBuffer>(s_Objects->GPU, indices.size(), indices.size() * sizeof(uint16_t), indices.data());
+	s_Data->Texture = MakeRefPtr<Image>(s_Objects->GPU, "res/models/viking_room/viking_room.png");
+	s_Data->Sampler = MakeRefPtr<Sampler>(s_Objects->GPU, s_Data->Texture->MipLevelSize());
 	s_Data->UBuffers.resize(s_Objects->SC->GetImages().size());
 	for (auto& ubuff : s_Data->UBuffers)
 		ubuff = MakeScopedPtr<UniformBuffer>(s_Objects->GPU, sizeof(UniformBufferObject));
@@ -174,15 +149,9 @@ void Graphics::Init(ScopedPtr<Window>& window)
 
 		vkCmdBindPipeline(s_Objects->CBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data->Pipeline->GetPipelineHandle());
 
-		VkBuffer vertexBuffers[] = { s_Data->VBuffer->GetBufferHandle() };
-		VkDeviceSize offsets[] = { 0 };
-		vkCmdBindVertexBuffers(s_Objects->CBuffers[i], 0, 1, vertexBuffers, offsets);
-
-		vkCmdBindIndexBuffer(s_Objects->CBuffers[i], s_Data->IBuffer->GetBufferHandle(), 0, VK_INDEX_TYPE_UINT16);
-
 		vkCmdBindDescriptorSets(s_Objects->CBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data->Pipeline->GetLayoutHandle(), 0, 1, &s_Data->DescSets[i], 0, nullptr);
 
-		vkCmdDrawIndexed(s_Objects->CBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+		s_Data->Room->Render(s_Objects->CBuffers[i]);
 
 		vkCmdEndRenderPass(s_Objects->CBuffers[i]);
 
@@ -298,7 +267,7 @@ void Graphics::RecreateSwapChain(ScopedPtr<class Window>& window)
 	s_Objects->SC = MakeScopedPtr<SwapChain>(s_Objects->GPU, window->GetSurface(), width, height);
 
 	s_Data->Pipeline.reset();
-	s_Data->Pipeline = MakeRefPtr<GraphicsPipeline>(s_Objects->GPU, s_Objects->SC, s_Data->DescSetLayout, "res/shaders/vert.spv", "res/shaders/frag.spv", s_Data->VLayout);
+	s_Data->Pipeline = MakeRefPtr<GraphicsPipeline>(s_Objects->GPU, s_Objects->SC, s_Data->DescSetLayout, "res/shaders/vert.spv", "res/shaders/frag.spv", s_Data->Room->GetVertexLayout());
 	for (auto& ubuff : s_Data->UBuffers) {
 		ubuff.reset();
 		ubuff = MakeScopedPtr<UniformBuffer>(s_Objects->GPU, sizeof(UniformBufferObject));
@@ -385,15 +354,9 @@ void Graphics::RecreateSwapChain(ScopedPtr<class Window>& window)
 
 		vkCmdBindPipeline(s_Objects->CBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data->Pipeline->GetPipelineHandle());
 
-		VkBuffer vertexBuffers[] = { s_Data->VBuffer->GetBufferHandle() };
-		VkDeviceSize offsets[] = { 0 };
-		vkCmdBindVertexBuffers(s_Objects->CBuffers[i], 0, 1, vertexBuffers, offsets);
-
-		vkCmdBindIndexBuffer(s_Objects->CBuffers[i], s_Data->IBuffer->GetBufferHandle(), 0, VK_INDEX_TYPE_UINT16);
-
 		vkCmdBindDescriptorSets(s_Objects->CBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data->Pipeline->GetLayoutHandle(), 0, 1, &s_Data->DescSets[i], 0, nullptr);
-
-		vkCmdDrawIndexed(s_Objects->CBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+		
+		s_Data->Room->Render(s_Objects->CBuffers[i]);
 
 		vkCmdEndRenderPass(s_Objects->CBuffers[i]);
 

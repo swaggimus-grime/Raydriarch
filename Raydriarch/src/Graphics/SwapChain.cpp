@@ -58,10 +58,10 @@ SwapChain::SwapChain(RefPtr<Device> device, ScopedPtr<Surface>& surface,
     m_ImageViews.resize(m_Images.size());
 
     for (size_t i = 0; i < m_Images.size(); i++) 
-        m_ImageViews[i] = Image::CreateImageView(m_Device, m_Images[i], m_Format, VK_IMAGE_ASPECT_COLOR_BIT);
+        m_ImageViews[i] = Image::CreateImageView(m_Device, m_Images[i], m_Format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 
     m_DepthBuffer = MakeScopedPtr<Image>(m_Device, m_Extent.width, m_Extent.height, Image::GetDepthFormat(m_Device),
-        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
     CreateRenderPass();
     CreateFramebuffers();
 }

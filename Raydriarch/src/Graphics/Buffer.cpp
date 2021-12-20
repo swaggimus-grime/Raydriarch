@@ -120,7 +120,7 @@ IndexBuffer::~IndexBuffer()
 
 void IndexBuffer::Bind(VkCommandBuffer& cmdBuffer)
 {
-	vkCmdBindIndexBuffer(cmdBuffer, m_Buffer, 0, VK_INDEX_TYPE_UINT16);
+	vkCmdBindIndexBuffer(cmdBuffer, m_Buffer, 0, VK_INDEX_TYPE_UINT32);
 }
 
 UniformBuffer::UniformBuffer(RefPtr<Device> device, VkDeviceSize size)
@@ -141,30 +141,25 @@ void UniformBuffer::Update(VkDeviceSize size, const void* data)
 	Map(m_Memory, size, data);
 }
 
-uint32_t VertexLayout::CalculateOffset(VkFormat format)
-{
-	uint32_t offset = 0;
-	switch (format) {
-	case VK_FORMAT_R32G32_SFLOAT:
-		offset = 2 * 4;
-		break;
-	case VK_FORMAT_R32G32B32_SFLOAT:
-		offset = 3 * 4;
-		break;
-	default:
-		RAYD_ERROR("Unsupported format!");
-	}
-
-	return offset;
-}
-
 void VertexLayout::AddAttribute(uint32_t location, uint32_t binding, VkFormat format)
 {
 	VkVertexInputAttributeDescription desc;
 	desc.binding = binding;
 	desc.location = location;
 	desc.format = format;
-	desc.offset = CalculateOffset(format);
+	desc.offset = m_Offset;
+
+	switch (format) {
+	case VK_FORMAT_R32G32_SFLOAT:
+		m_Offset += 2 * 4;
+		break;
+	case VK_FORMAT_R32G32B32_SFLOAT:
+		m_Offset += 3 * 4;
+		break;
+	default:
+		RAYD_ERROR("Unsupported format!");
+	}
+
 	m_AttribDescriptions.push_back(desc);
 }
 

@@ -8,18 +8,17 @@
 #include "Command.h"
 #include "Buffer.h"
 #include "Image.h"
+#include "Model.h"
 
 struct SceneData {
 	RefPtr<class GraphicsPipeline> Pipeline;
-	VertexLayout VLayout;
-	RefPtr<VertexBuffer > VBuffer;
-	RefPtr<IndexBuffer> IBuffer;
 	RefPtr<Image> Texture;
 	RefPtr<Sampler> Sampler;
 	std::vector<ScopedPtr<UniformBuffer>> UBuffers;
 	VkDescriptorSetLayout DescSetLayout;
 	RefPtr<class DescriptorPool> DescPool;
 	std::vector<VkDescriptorSet> DescSets;
+	ScopedPtr<Model> Room;
 };
 
 struct GraphicsObjects {

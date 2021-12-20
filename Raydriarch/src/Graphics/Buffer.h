@@ -54,17 +54,17 @@ private:
 
 class VertexLayout {
 public:
-	VertexLayout() = default;
+	VertexLayout() : m_Offset(0) {}
 	void AddAttribute(uint32_t location, uint32_t binding, VkFormat format);
 	void AddBinding(uint32_t binding, uint32_t stride, VkVertexInputRate inputRate);
 
 	inline const std::vector<VkVertexInputAttributeDescription>& GetAttributes() { return m_AttribDescriptions; }
 	inline const std::vector<VkVertexInputBindingDescription>& GetBindings() { return m_Bindings; }
-private:
-	uint32_t CalculateOffset(VkFormat format);
+
 private:
 	std::vector<VkVertexInputAttributeDescription> m_AttribDescriptions;
 	std::vector<VkVertexInputBindingDescription> m_Bindings;
+	uint32_t m_Offset;
 };
 
 class UniformBuffer : public Buffer {
