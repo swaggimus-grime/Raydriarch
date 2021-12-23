@@ -9,7 +9,7 @@ public:
 	DescriptorSetLayout(RefPtr<Device> device, std::vector<VkDescriptorSetLayoutBinding>& bindings);
 	~DescriptorSetLayout();
 
-	inline const VkDescriptorSetLayout& GetLayoutHandle() const { return m_Layout; }
+	inline const VkDescriptorSetLayout& GetHandle() const { return m_Layout; }
 private:
 	RefPtr<Device> m_Device;
 

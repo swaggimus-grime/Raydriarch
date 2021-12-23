@@ -9,13 +9,15 @@
 #include "Buffer.h"
 #include "Image.h"
 #include "Model.h"
+#include "Descriptor.h"
 
 struct SceneData {
+	std::vector<VkPushConstantRange> PushConstants;
 	RefPtr<class GraphicsPipeline> Pipeline;
 	RefPtr<Image> Texture;
 	RefPtr<Sampler> Sampler;
 	std::vector<ScopedPtr<UniformBuffer>> UBuffers;
-	VkDescriptorSetLayout DescSetLayout;
+	RefPtr<DescriptorSetLayout> DescSetLayout;
 	RefPtr<class DescriptorPool> DescPool;
 	std::vector<VkDescriptorSet> DescSets;
 	ScopedPtr<Model> Room;

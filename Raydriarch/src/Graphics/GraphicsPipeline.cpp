@@ -7,8 +7,8 @@
 //Defines max number of frames that are allowed to be processed by the graphics pipeline 
 #define MAX_FRAMES_IN_FLIGHT 2
 
-GraphicsPipeline::GraphicsPipeline(RefPtr<Device> device, ScopedPtr<SwapChain>& swapChain, VkDescriptorSetLayout& descSetLayout, 
-    const std::string& vertShaderPath, const std::string& fragShaderPath, VertexLayout& vlayout)
+GraphicsPipeline::GraphicsPipeline(RefPtr<Device> device, ScopedPtr<SwapChain>& swapChain, RefPtr<DescriptorSetLayout> descSetLayout,
+    const std::string& vertShaderPath, const std::string& fragShaderPath, const std::vector<VkPushConstantRange>& pushConstants, VertexLayout& vlayout)
 	:m_Device(device)
 {
 	Shader shader(m_Device, vertShaderPath, fragShaderPath);
@@ -67,7 +67,7 @@ GraphicsPipeline::GraphicsPipeline(RefPtr<Device> device, ScopedPtr<SwapChain>& 
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.cullMode = VK_CULL_MODE_NONE;
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
@@ -102,7 +102,9 @@ GraphicsPipeline::GraphicsPipeline(RefPtr<Device> device, ScopedPtr<SwapChain>& 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &descSetLayout;
+    pipelineLayoutInfo.pSetLayouts = &descSetLayout->GetHandle();
+    pipelineLayoutInfo.pushConstantRangeCount = pushConstants.size();
+    pipelineLayoutInfo.pPushConstantRanges = pushConstants.data();
 
     RAYD_VK_VALIDATE(vkCreatePipelineLayout(m_Device->GetDeviceHandle(), &pipelineLayoutInfo, nullptr, &m_Layout), "Failed to create pipeline layout!");
 

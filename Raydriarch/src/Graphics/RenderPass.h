@@ -14,7 +14,7 @@ public:
 	RenderPass(RefPtr<Device> device, VkAttachmentDescription* attachmentDescriptions, VkSubpassDescription* subpassDescriptions, VkSubpassDependency* subpassDependencies);
 	~RenderPass() { vkDestroyRenderPass(m_Device->GetDeviceHandle(), m_RenderPass, nullptr); }
 
-	inline const VkRenderPass& GetRenderPassHandle() const { return m_RenderPass; }
+	inline const VkRenderPass& GetHandle() const { return m_RenderPass; }
 private:
 	RefPtr<Device> m_Device;
 

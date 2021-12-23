@@ -17,6 +17,10 @@ struct UniformBufferObject {
 	alignas(16) glm::mat4 proj;
 };
 
+struct PushConstantData {
+	glm::vec3 color;
+};
+
 void Graphics::Init(ScopedPtr<Window>& window)
 {
 	VkPhysicalDeviceFeatures deviceFeatures{};
@@ -52,15 +56,16 @@ void Graphics::Init(ScopedPtr<Window>& window)
 	descLayoutBindings.push_back(uboLayoutBinding);
 	descLayoutBindings.push_back(samplerLayoutBinding);
 
-	VkDescriptorSetLayoutCreateInfo layoutInfo{};
-	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = descLayoutBindings.size();
-	layoutInfo.pBindings = descLayoutBindings.data();
-
-	RAYD_VK_VALIDATE(vkCreateDescriptorSetLayout(s_Objects->GPU->GetDeviceHandle(), &layoutInfo, nullptr, &s_Data->DescSetLayout), "Failed to create descriptor set layout!");
+	s_Data->DescSetLayout = MakeRefPtr<DescriptorSetLayout>(s_Objects->GPU, descLayoutBindings);
 
 	s_Data->Room = MakeScopedPtr<Model>(s_Objects->GPU, "res/models/viking_room/viking_room.obj");
-	s_Data->Pipeline = MakeRefPtr<GraphicsPipeline>(s_Objects->GPU, s_Objects->SC, s_Data->DescSetLayout, "res/shaders/vert.spv", "res/shaders/frag.spv", s_Data->Room->GetVertexLayout());
+	VkPushConstantRange pcr;
+	pcr.offset = 0;
+	pcr.size = sizeof(PushConstantData);
+	pcr.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	s_Data->PushConstants.push_back(pcr);
+	s_Data->Pipeline = MakeRefPtr<GraphicsPipeline>(s_Objects->GPU, s_Objects->SC, s_Data->DescSetLayout, 
+		"res/shaders/vert.spv", "res/shaders/frag.spv", s_Data->PushConstants, s_Data->Room->GetVertexLayout());
 
 	s_Data->Texture = MakeRefPtr<Image>(s_Objects->GPU, "res/models/viking_room/viking_room.png");
 	s_Data->Sampler = MakeRefPtr<Sampler>(s_Objects->GPU, s_Data->Texture->MipLevelSize());
@@ -71,7 +76,7 @@ void Graphics::Init(ScopedPtr<Window>& window)
 	poolSizes.push_back({ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, static_cast<uint32_t>(s_Objects->SC->GetImages().size()) });
 	poolSizes.push_back({ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, static_cast<uint32_t>(s_Objects->SC->GetImages().size()) });
 	s_Data->DescPool = MakeRefPtr<DescriptorPool>(s_Objects->GPU, s_Objects->SC->GetImages().size(), poolSizes);
-	std::vector<VkDescriptorSetLayout> layouts(s_Objects->SC->GetImages().size(), s_Data->DescSetLayout);
+	std::vector<VkDescriptorSetLayout> layouts(s_Objects->SC->GetImages().size(), s_Data->DescSetLayout->GetHandle());
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = s_Data->DescPool->GetPoolHandle();
@@ -150,6 +155,10 @@ void Graphics::Init(ScopedPtr<Window>& window)
 		vkCmdBindPipeline(s_Objects->CBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data->Pipeline->GetPipelineHandle());
 
 		vkCmdBindDescriptorSets(s_Objects->CBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data->Pipeline->GetLayoutHandle(), 0, 1, &s_Data->DescSets[i], 0, nullptr);
+
+		PushConstantData pushData;
+		pushData.color = { .3, .5, .7 };
+		vkCmdPushConstants(s_Objects->CBuffers[i], s_Data->Pipeline->GetLayoutHandle(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushData), &pushData);
 
 		s_Data->Room->Render(s_Objects->CBuffers[i]);
 
@@ -262,7 +271,8 @@ void Graphics::RecreateSwapChain(ScopedPtr<class Window>& window)
 	s_Objects->SC = MakeScopedPtr<SwapChain>(s_Objects->GPU, window->GetSurface(), width, height);
 
 	s_Data->Pipeline.reset();
-	s_Data->Pipeline = MakeRefPtr<GraphicsPipeline>(s_Objects->GPU, s_Objects->SC, s_Data->DescSetLayout, "res/shaders/vert.spv", "res/shaders/frag.spv", s_Data->Room->GetVertexLayout());
+	s_Data->Pipeline = MakeRefPtr<GraphicsPipeline>(s_Objects->GPU, s_Objects->SC, s_Data->DescSetLayout,
+		"res/shaders/vert.spv", "res/shaders/frag.spv", s_Data->PushConstants, s_Data->Room->GetVertexLayout());
 	for (auto& ubuff : s_Data->UBuffers) {
 		ubuff.reset();
 		ubuff = MakeScopedPtr<UniformBuffer>(s_Objects->GPU, sizeof(UniformBufferObject));
@@ -272,7 +282,7 @@ void Graphics::RecreateSwapChain(ScopedPtr<class Window>& window)
 	poolSizes.push_back({ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, static_cast<uint32_t>(s_Objects->SC->GetImages().size()) });
 	poolSizes.push_back({ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, static_cast<uint32_t>(s_Objects->SC->GetImages().size()) });
 	s_Data->DescPool = MakeRefPtr<DescriptorPool>(s_Objects->GPU, s_Objects->SC->GetImages().size(), poolSizes);
-	std::vector<VkDescriptorSetLayout> layouts(s_Objects->SC->GetImages().size(), s_Data->DescSetLayout);
+	std::vector<VkDescriptorSetLayout> layouts(s_Objects->SC->GetImages().size(), s_Data->DescSetLayout->GetHandle());
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = s_Data->DescPool->GetPoolHandle();
@@ -351,6 +361,10 @@ void Graphics::RecreateSwapChain(ScopedPtr<class Window>& window)
 
 		vkCmdBindDescriptorSets(s_Objects->CBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data->Pipeline->GetLayoutHandle(), 0, 1, &s_Data->DescSets[i], 0, nullptr);
 		
+		PushConstantData pushData;
+		pushData.color = { .3, .5, .7 };
+		vkCmdPushConstants(s_Objects->CBuffers[i], s_Data->Pipeline->GetLayoutHandle(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushData), &pushData);
+		
 		s_Data->Room->Render(s_Objects->CBuffers[i]);
 
 		vkCmdEndRenderPass(s_Objects->CBuffers[i]);
@@ -368,7 +382,7 @@ void Graphics::CleanupSwapChain()
 	vkFreeCommandBuffers(s_Objects->GPU->GetDeviceHandle(), s_Objects->CommandPool, static_cast<uint32_t>(s_Objects->CBuffers.size()), s_Objects->CBuffers.data());
 	s_Data->Pipeline.reset();
 
-	for (auto& buff : s_Data->UBuffers)
+	for (auto& buff : s_Data->UBuffers)																																				
 		buff.reset();
 
 	s_Data->DescPool.reset();
@@ -377,8 +391,6 @@ void Graphics::CleanupSwapChain()
 void Graphics::Shutdown()
 {
 	CleanupSwapChain();
-
-	vkDestroyDescriptorSetLayout(s_Objects->GPU->GetDeviceHandle(), s_Data->DescSetLayout, nullptr);
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroySemaphore(s_Objects->GPU->GetDeviceHandle(), s_Objects->RenderFinishSemaphores[i], nullptr);
